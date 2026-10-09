@@ -12,7 +12,8 @@ export const validateRequest = (schema: ZodSchema) =>
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Validation failed', details: error.issues });
+        const msg = error.issues.map(i => i.message).join(', ');
+        res.status(400).json({ error: msg || 'Validation failed' });
       } else {
         res.status(400).json({ error: 'Validation failed' });
       }
@@ -21,9 +22,11 @@ export const validateRequest = (schema: ZodSchema) =>
 
 export const registerSchema = z.object({
   body: z.object({
-    fullName: z.string().min(2).max(120),
-    email: z.string().email().max(180),
-    password: z.string().min(6).max(255),
+    fullName: z.string().min(1, 'Name cannot be empty').max(120),
+    email: z.string().email('Invalid email address').refine(val => val.toLowerCase().endsWith('@vitstudent.ac.in'), {
+      message: 'Email must end with @vitstudent.ac.in'
+    }),
+    password: z.string().min(1, 'Password cannot be empty').max(255),
     phone: z.string().max(20).optional(),
     role: z.enum(['CUSTOMER', 'STAFF', 'OWNER']).default('CUSTOMER')
   })
@@ -31,8 +34,8 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   body: z.object({
-    email: z.string().email(),
-    password: z.string()
+    email: z.string().email('Invalid email address'),
+    password: z.string().min(1, 'Password cannot be empty')
   })
 });
 
