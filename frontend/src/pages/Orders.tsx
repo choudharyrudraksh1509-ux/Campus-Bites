@@ -61,6 +61,17 @@ export default function Orders() {
     fetchOrders();
   }, []);
 
+  const handleCancel = async (orderId: number) => {
+    if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    try {
+      await api.patch(`/orders/${orderId}/cancel`);
+      alert('Order cancelled successfully.');
+      fetchOrders();
+    } catch (error: any) {
+      alert(`Failed to cancel order: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
   return (
     <div className="space-y-6 fade-in pt-20 pb-24 max-w-4xl mx-auto">
       
@@ -185,7 +196,16 @@ export default function Orders() {
 
                 {/* Order Footer */}
                 <div className="pt-3 border-t border-[#930E36]/60 flex justify-between items-center text-xs text-white">
-                  <span className="text-white/80">Takeaway Payment Complete</span>
+                  {(order.status === 'PLACED' || order.status === 'PAYMENT_PENDING') ? (
+                    <button
+                      onClick={() => handleCancel(order.order_id)}
+                      className="text-[#ff4d4d] hover:text-[#ff1a1a] underline font-medium"
+                    >
+                      Cancel Order
+                    </button>
+                  ) : (
+                    <span className="text-white/80">Takeaway Payment Complete</span>
+                  )}
                   <span className="text-white text-sm">Total Paid: ₹{order.total_amount}</span>
                 </div>
               </div>

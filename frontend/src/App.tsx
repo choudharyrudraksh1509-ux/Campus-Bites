@@ -6,6 +6,7 @@ import FloatingCart from './components/FloatingCart';
 import Home from './pages/Home';
 import Menu from './pages/Menu';
 import Orders from './pages/Orders';
+import StaffDashboard from './pages/StaffDashboard';
 import Login from './pages/Login';
 import api from './services/api';
 
@@ -94,6 +95,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/shop/:shopId/menu" element={<Menu />} />
               <Route path="/orders" element={<Orders />} />
+              <Route path="/staff" element={<StaffDashboard />} />
               <Route path="/login" element={<Home />} />
             </Routes>
           )}

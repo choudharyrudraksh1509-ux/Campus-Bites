@@ -292,12 +292,20 @@ export default function Menu() {
       if (token) {
         try {
           const res = await api.post('/orders', payload);
-          if (res.data?.orderId) orderId = res.data.orderId;
-        } catch (e) {
-          console.warn('API post order failed, proceeding with local order token');
+          if (res.data?.orderId) {
+            orderId = res.data.orderId;
+            // Automatically confirm payment since we are mocking it
+            await api.post(`/orders/${orderId}/payment`);
+          }
+        } catch (e: any) {
+          console.warn('API post order failed', e.response?.data?.error || e.message);
+          alert(`Failed to place order: ${e.response?.data?.error || e.message}`);
+          setIsSubmitting(false);
+          return;
         }
       }
 
+      // We no longer strictly need localStorage, but keeping it for guest fallback
       const savedOrders = JSON.parse(localStorage.getItem('campusbite_orders') || '[]');
       const newOrder = {
         order_id: orderId,

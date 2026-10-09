@@ -47,7 +47,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const role = 'CUSTOMER'; // Dummy
+        const userRoles = await prisma.userRole.findMany({ where: { userId: user.id }, include: { role: true } });
+        const role = userRoles.length > 0 ? userRoles[0].role.name : 'CUSTOMER';
 
         const token = jwt.sign(
             { userId: user.id, role },
@@ -74,7 +75,9 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
             res.status(404).json({ error: 'User not found' });
             return;
         }
-        res.json({ user: { id: user.id, name: user.fullName, email: user.email, phone: user.phone, role: 'CUSTOMER' } });
+        const userRoles = await prisma.userRole.findMany({ where: { userId }, include: { role: true } });
+        const role = userRoles.length > 0 ? userRoles[0].role.name : 'CUSTOMER';
+        res.json({ user: { id: user.id, name: user.fullName, email: user.email, phone: user.phone, role } });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Internal server error' });

@@ -31,6 +31,16 @@ export default function Navbar({ user, onLogout, onOpenAuth }: NavbarProps) {
         >
           Activity
         </Link>
+        {user && (user.role === 'STAFF' || user.role === 'OWNER') && (
+          <Link
+            to="/staff"
+            className={`text-xs px-3.5 py-1.5 rounded-full transition-all ${
+              location.pathname === '/staff' ? 'bg-white/15 text-[#FF004B]' : 'text-[#FF004B]/70 hover:text-[#FF004B]'
+            }`}
+          >
+            Portal
+          </Link>
+        )}
       </div>
 
       {/* Column 2 (Center): Brand Name 'Bites' strictly centered */}

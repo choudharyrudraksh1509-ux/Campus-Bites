@@ -7,24 +7,32 @@ async function main() {
   console.log('Seeding CampusBite Database...');
   const passwordHash = await bcrypt.hash('password123', 10);
 
+  // Roles
+  const roleCustomer = await prisma.role.upsert({ where: { name: 'CUSTOMER' }, update: {}, create: { name: 'CUSTOMER' } });
+  const roleStaff = await prisma.role.upsert({ where: { name: 'STAFF' }, update: {}, create: { name: 'STAFF' } });
+  const roleOwner = await prisma.role.upsert({ where: { name: 'OWNER' }, update: {}, create: { name: 'OWNER' } });
+
   // Users
   const student = await prisma.user.upsert({
-    where: { email: 'student@vit.ac.in' },
+    where: { email: 'student@vitstudent.ac.in' },
     update: {},
-    create: { fullName: 'Samyak Student', email: 'student@vit.ac.in', passwordHash, phone: '9876543210' }
+    create: { fullName: 'Samyak Student', email: 'student@vitstudent.ac.in', passwordHash, phone: '9876543210' }
   });
+  await prisma.userRole.upsert({ where: { userId_roleId: { userId: student.id, roleId: roleCustomer.id } }, update: {}, create: { userId: student.id, roleId: roleCustomer.id } });
 
   const staff = await prisma.user.upsert({
-    where: { email: 'staff@vit.ac.in' },
+    where: { email: 'staff@campusbites.com' },
     update: {},
-    create: { fullName: 'Rajesh Staff', email: 'staff@vit.ac.in', passwordHash }
+    create: { fullName: 'Rajesh Staff', email: 'staff@campusbites.com', passwordHash }
   });
+  await prisma.userRole.upsert({ where: { userId_roleId: { userId: staff.id, roleId: roleStaff.id } }, update: {}, create: { userId: staff.id, roleId: roleStaff.id } });
 
   const owner = await prisma.user.upsert({
-    where: { email: 'owner@vit.ac.in' },
+    where: { email: 'owner@campusbites.com' },
     update: {},
-    create: { fullName: 'Vikram Owner', email: 'owner@vit.ac.in', passwordHash }
+    create: { fullName: 'Vikram Owner', email: 'owner@campusbites.com', passwordHash }
   });
+  await prisma.userRole.upsert({ where: { userId_roleId: { userId: owner.id, roleId: roleOwner.id } }, update: {}, create: { userId: owner.id, roleId: roleOwner.id } });
 
   // Areas (Campus Complexes)
   const gazeboArea = await prisma.area.upsert({
