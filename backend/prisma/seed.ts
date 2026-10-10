@@ -13,12 +13,6 @@ async function main() {
   const roleOwner = await prisma.role.upsert({ where: { name: 'OWNER' }, update: {}, create: { name: 'OWNER' } });
 
   // Users
-  const student = await prisma.user.upsert({
-    where: { email: 'student@vitstudent.ac.in' },
-    update: {},
-    create: { fullName: 'Samyak Student', email: 'student@vitstudent.ac.in', passwordHash, phone: '9876543210' }
-  });
-  await prisma.userRole.upsert({ where: { userId_roleId: { userId: student.id, roleId: roleCustomer.id } }, update: {}, create: { userId: student.id, roleId: roleCustomer.id } });
 
   const staff = await prisma.user.upsert({
     where: { email: 'staff@campusbites.com' },

@@ -8,7 +8,7 @@ interface LoginProps {
 }
 
 export default function Login({ onSuccess }: LoginProps) {
-  const [loginType, setLoginType] = useState<'STUDENT' | 'STAFF'>('STUDENT');
+  const [loginType, setLoginType] = useState<'USER' | 'STAFF'>('USER');
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,8 +22,8 @@ export default function Login({ onSuccess }: LoginProps) {
       setError('Please enter your full name.');
       return false;
     }
-    if (loginType === 'STUDENT' && (!email.trim() || !email.toLowerCase().endsWith('@vitstudent.ac.in'))) {
-      setError('Student email must end with @vitstudent.ac.in (e.g. samyak.m2023@vitstudent.ac.in)');
+    if (loginType === 'USER' && (!email.trim() || !email.toLowerCase().endsWith('@vitstudent.ac.in'))) {
+      setError('User email must end with @vitstudent.ac.in (e.g. samyak.m2023@vitstudent.ac.in)');
       return false;
     }
     if (loginType === 'STAFF' && !email.trim()) {
@@ -79,10 +79,10 @@ export default function Login({ onSuccess }: LoginProps) {
           {/* Student vs Staff Mode Switcher */}
           <div className="flex justify-center space-x-4 mb-4 border-b border-white/10 pb-4">
             <button
-              onClick={() => { setLoginType('STUDENT'); setIsRegister(false); setError(''); }}
-              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'STUDENT' ? 'text-white border-b-2 border-white pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
+              onClick={() => { setLoginType('USER'); setIsRegister(false); setError(''); }}
+              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'USER' ? 'text-white border-b-2 border-white pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
             >
-              Student Login
+              User Login
             </button>
             <button
               onClick={() => { setLoginType('STAFF'); setIsRegister(false); setError(''); }}
@@ -93,7 +93,7 @@ export default function Login({ onSuccess }: LoginProps) {
           </div>
           
           {/* Form Mode Switcher (Log In / Create Account) - Hidden for Staff */}
-          {loginType === 'STUDENT' && (
+          {loginType === 'USER' && (
             <div className="grid grid-cols-2 p-1 bg-[#930E36]/30 border border-[#930E36]/50 rounded-2xl">
               <button
                 type="button"
@@ -147,14 +147,14 @@ export default function Login({ onSuccess }: LoginProps) {
 
             <div>
               <label className="block text-xs text-white/80 mb-1.5 uppercase tracking-wider">
-                {loginType === 'STUDENT' ? 'CAMPUS EMAIL (@vitstudent.ac.in)' : 'STAFF/OWNER EMAIL'}
+                {loginType === 'USER' ? 'USER EMAIL (@vitstudent.ac.in)' : 'STAFF/OWNER EMAIL'}
               </label>
               <div className="relative">
                 <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="email"
                   required
-                  placeholder={loginType === 'STUDENT' ? 'your.name@vitstudent.ac.in' : 'staff@campusbites.com'}
+                  placeholder={loginType === 'USER' ? 'your.name@vitstudent.ac.in' : 'staff@campusbites.com'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-11 pr-4 py-3.5 bg-[#930E36]/30 border border-[#930E36]/50 rounded-2xl text-xs text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#930E36]"
@@ -195,7 +195,7 @@ export default function Login({ onSuccess }: LoginProps) {
           </form>
 
           {/* Bottom Footer toggle helper - Hidden for staff */}
-          {loginType === 'STUDENT' && (
+          {loginType === 'USER' && (
             <div className="pt-2 text-center">
               <p className="text-xs text-white/80">
                 {isRegister ? 'Already registered on Bites?' : "Don't have an account yet?"}
