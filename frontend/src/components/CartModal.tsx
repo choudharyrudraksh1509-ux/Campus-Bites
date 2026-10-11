@@ -170,12 +170,20 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex sm:items-center items-end justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-[#4C1829] text-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.95)] border-t sm:border border-[#930E36] relative overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]">
+      <div
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1.25rem)'
+        }}
+        className="bg-[#4C1829] text-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.95)] border-t sm:border border-[#930E36] relative overflow-hidden flex flex-col h-[82vh] sm:h-auto sm:max-h-[88vh]"
+      >
         <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-20 pointer-events-none mix-blend-overlay"></div>
+
+        {/* Native mobile drag indicator pill */}
+        <div className="w-12 h-1 bg-white/25 rounded-full mx-auto mb-3 shrink-0 sm:hidden" />
 
         <div className="relative z-10 flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[#930E36]/60 pb-4 mb-4 shrink-0">
+          <div className="flex items-center justify-between border-b border-[#930E36]/60 pb-3 mb-3 shrink-0">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 bg-[#930E36]/40 rounded-2xl border border-[#930E36]/60">
                 <ShoppingBag size={22} className="text-white" />
@@ -239,14 +247,14 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
 
           {/* Modal Body */}
           {cart.length === 0 ? (
-            /* Empty Cart State */
-            <div className="py-12 text-center text-white/70 space-y-4 my-auto">
-              <div className="w-16 h-16 bg-[#930E36]/30 border border-[#930E36]/50 rounded-3xl flex items-center justify-center mx-auto text-white">
-                <ShoppingBag size={32} className="opacity-70" />
+            /* Empty Cart State - Centered cleanly on screen without awkward empty space */
+            <div className="flex-1 flex flex-col items-center justify-center py-6 text-center text-white/70 space-y-4 my-auto">
+              <div className="w-20 h-20 bg-[#930E36]/30 border border-[#930E36]/50 rounded-3xl flex items-center justify-center mx-auto text-white shadow-inner">
+                <ShoppingBag size={36} className="opacity-80" />
               </div>
-              <div className="space-y-1">
-                <h4 className="text-base font-medium text-white">Your takeaway cart is empty</h4>
-                <p className="text-xs text-white/70 max-w-xs mx-auto">
+              <div className="space-y-1.5 max-w-xs mx-auto">
+                <h4 className="text-lg font-medium text-white">Your takeaway cart is empty</h4>
+                <p className="text-xs text-white/70 leading-relaxed">
                   Browse campus outlets and add delicious food items to place your takeaway order.
                 </p>
               </div>
@@ -255,7 +263,7 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
                   onClose();
                   navigate('/');
                 }}
-                className="inline-flex items-center space-x-2 px-6 py-2.5 bg-white text-[#4C1829] font-medium text-xs rounded-xl hover:bg-white/90 transition-all uppercase tracking-wider shadow-lg"
+                className="inline-flex items-center space-x-2 px-6 py-3 bg-white text-[#4C1829] font-medium text-xs rounded-xl hover:bg-white/90 active:scale-95 transition-all uppercase tracking-wider shadow-lg"
               >
                 <span>Browse Campus Outlets</span>
                 <ArrowRight size={14} />
@@ -263,7 +271,7 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
             </div>
           ) : viewStep === 'cart' ? (
             /* Cart Items View */
-            <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
               {/* Outlet Notice */}
               <div className="text-[11px] bg-[#930E36]/30 text-white/90 p-2.5 rounded-xl border border-[#930E36]/50 flex items-center space-x-2 mb-3 shrink-0">
                 <Clock size={14} className="text-white shrink-0" />
@@ -273,7 +281,7 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
               </div>
 
               {/* Scrollable Items List */}
-              <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 max-h-[36vh]">
+              <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 min-h-0">
                 {cart.map(item => (
                   <div
                     key={item.id}
@@ -353,7 +361,7 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
             </div>
           ) : (
             /* Checkout & Payment View */
-            <div className="flex flex-col flex-1 overflow-hidden space-y-3.5">
+            <div className="flex flex-col flex-1 min-h-0 overflow-y-auto space-y-3.5 pr-1">
               {/* Back to Cart button */}
               <button
                 onClick={() => setViewStep('cart')}

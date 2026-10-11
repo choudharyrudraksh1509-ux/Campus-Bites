@@ -102,10 +102,17 @@ function App() {
         />
 
         {/* Main Route Content - Require Auth Gate */}
-        <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-12 md:pt-4 pb-20 md:pb-6">
-          {!user ? (
+        {!user ? (
+          <main className="w-full min-h-[100dvh] flex items-center justify-center p-4">
             <Login onSuccess={handleAuthSuccess} />
-          ) : (
+          </main>
+        ) : (
+          <main
+            style={{
+              paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 3.75rem)'
+            }}
+            className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 md:!pt-24 pb-0"
+          >
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/shop/:shopId/menu" element={<Menu />} />
@@ -113,8 +120,8 @@ function App() {
               <Route path="/staff" element={<StaffDashboard />} />
               <Route path="/login" element={<Home />} />
             </Routes>
-          )}
-        </main>
+          </main>
+        )}
       </div>
     </Router>
   );

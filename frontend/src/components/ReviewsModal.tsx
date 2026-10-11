@@ -181,8 +181,16 @@ export default function ReviewsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex sm:items-center items-end justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
-      <div className="bg-[#4C1829] text-white rounded-t-3xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-[0_30px_70px_rgba(0,0,0,0.95),0_10px_30px_rgba(76,24,41,0.8)] border-t sm:border border-[#930E36] relative overflow-hidden my-0 sm:my-auto">
+      <div
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1.25rem)'
+        }}
+        className="bg-[#4C1829] text-white rounded-t-3xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-[0_30px_70px_rgba(0,0,0,0.95),0_10px_30px_rgba(76,24,41,0.8)] border-t sm:border border-[#930E36] relative overflow-hidden my-0 sm:my-auto"
+      >
         
+        {/* Native mobile drag indicator pill */}
+        <div className="w-12 h-1 bg-white/25 rounded-full mx-auto mt-3 sm:hidden shrink-0" />
+
         {/* Subtle patterned overlay */}
         <div className="absolute inset-0 bg-small-dots opacity-20 pointer-events-none mix-blend-overlay"></div>
 

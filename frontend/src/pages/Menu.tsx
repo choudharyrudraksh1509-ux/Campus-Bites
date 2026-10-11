@@ -367,7 +367,7 @@ export default function Menu() {
   });
 
   return (
-    <div className="space-y-6 fade-in pt-3 md:pt-20 pb-24 md:pb-28 max-w-6xl mx-auto">
+    <div className="space-y-6 fade-in pb-[calc(max(env(safe-area-inset-bottom,0px),8px)+4.5rem)] md:pb-12 max-w-6xl mx-auto">
       
       {/* Single Outlet Conflict Modal */}
       <SingleOutletModal

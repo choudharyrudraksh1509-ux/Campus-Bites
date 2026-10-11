@@ -112,8 +112,16 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
 
   return (
     <div className="fixed inset-0 z-50 flex sm:items-center items-end justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-[#4C1829] text-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.9)] border-t sm:border border-[#930E36] relative overflow-hidden max-h-[92vh] overflow-y-auto">
+      <div
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1.5rem)'
+        }}
+        className="bg-[#4C1829] text-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.9)] border-t sm:border border-[#930E36] relative overflow-hidden max-h-[92vh] overflow-y-auto"
+      >
         <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-15 pointer-events-none mix-blend-overlay"></div>
+
+        {/* Native mobile drag indicator pill */}
+        <div className="w-12 h-1 bg-white/25 rounded-full mx-auto mb-3 shrink-0 sm:hidden" />
 
         <div className="relative z-10">
           {/* Header */}

@@ -83,8 +83,8 @@ export default function Login({ onSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 fade-in">
-      <div className="w-full max-w-md bg-[#4C1829] text-white rounded-3xl p-6 sm:p-8 shadow-[0_35px_80px_rgba(0,0,0,0.95)] border border-[#930E36] relative overflow-hidden space-y-6 opacity-100">
+    <div className="w-full max-w-md my-auto fade-in">
+      <div className="w-full bg-[#4C1829] text-white rounded-3xl p-6 sm:p-8 shadow-[0_35px_80px_rgba(0,0,0,0.95)] border border-[#930E36] relative overflow-hidden space-y-6">
         
         {/* Halftone Pattern Overlay */}
         <div className="absolute inset-0 bg-small-dots opacity-20 pointer-events-none mix-blend-overlay"></div>

@@ -106,7 +106,7 @@ export default function Orders() {
   };
 
   return (
-    <div className="space-y-6 fade-in pt-3 md:pt-20 pb-20 md:pb-28 max-w-4xl mx-auto px-1 sm:px-0">
+    <div className="space-y-6 fade-in pb-[calc(max(env(safe-area-inset-bottom,0px),8px)+4.5rem)] md:pb-12 max-w-4xl mx-auto px-1 sm:px-0">
       
       {/* Top Header Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#4C1829] text-white rounded-3xl p-6 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_10px_30px_rgba(76,24,41,0.6)] border border-[#930E36] relative overflow-hidden">

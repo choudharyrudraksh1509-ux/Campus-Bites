@@ -49,7 +49,12 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
       {/* ======================================================== */}
       {/* 1. DESKTOP / LAPTOP / TABLET FLOATING NAVBAR (md and up) */}
       {/* ======================================================== */}
-      <header className="hidden md:grid fixed top-4 left-1/2 -translate-x-1/2 z-40 max-w-2xl w-[92%] backdrop-blur-xl bg-[#1D1D21]/90 border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.6)] grid-cols-3 items-center px-6 py-3.5 transition-all">
+      <header
+        style={{
+          top: 'max(env(safe-area-inset-top, 0px), 1rem)'
+        }}
+        className="hidden md:grid fixed left-1/2 -translate-x-1/2 z-40 max-w-2xl w-[92%] backdrop-blur-xl bg-[#1D1D21]/90 border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.6)] grid-cols-3 items-center px-6 py-3.5 transition-all"
+      >
         
         {/* Column 1 (Left): Navigation Links */}
         <div className="flex items-center space-x-1 sm:space-x-2">
@@ -130,7 +135,13 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
       {/* ======================================================== */}
       {/* 2. MOBILE TOP APP BAR (phones < md)                      */}
       {/* ======================================================== */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex items-center justify-between shadow-md">
+      <header
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 10px)',
+          paddingBottom: '10px'
+        }}
+        className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-b border-white/10 px-4 flex items-center justify-between shadow-md"
+      >
         <Link to="/" className="flex items-center space-x-2 group">
           <span className="text-lg font-bold tracking-tight text-white group-hover:text-[#FF004B] transition-colors">
             Bites
@@ -156,7 +167,7 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
               <button
                 onClick={onLogout}
                 title="Logout"
-                className="p-1.5 text-white/50 hover:text-white rounded-full transition-colors"
+                className="p-1.5 text-white/50 hover:text-white rounded-full transition-colors active:scale-90"
               >
                 <LogOut size={16} />
               </button>
@@ -175,7 +186,13 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
       {/* ======================================================== */}
       {/* 3. MOBILE NATIVE BOTTOM NAVIGATION BAR (phones < md)     */}
       {/* ======================================================== */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-t border-white/10 px-2 py-1.5 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.5)]">
+      <nav
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+          paddingTop: '6px'
+        }}
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-t border-white/10 px-2 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.5)]"
+      >
         <Link
           to="/"
           className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${

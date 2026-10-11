@@ -40,7 +40,7 @@ export default function FloatingCart({ cartCount }: FloatingCartProps) {
   return (
     <>
       {dynamicCount > 0 && (
-        <div className="fixed bottom-20 right-4 sm:bottom-8 sm:right-8 z-40 animate-fade-in">
+        <div className="hidden md:block fixed md:bottom-8 md:right-8 z-40 animate-fade-in">
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-[#4C1829] hover:bg-[#5C1D33] text-white text-xs px-6 py-4 rounded-full shadow-[0_25px_60px_rgba(0,0,0,0.85),0_10px_25px_rgba(76,24,41,0.5)] border border-[#930E36] flex items-center space-x-3 transition-all hover:scale-105 active:scale-95 uppercase tracking-wider relative overflow-hidden"

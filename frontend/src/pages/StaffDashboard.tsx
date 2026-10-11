@@ -69,7 +69,7 @@ export default function StaffDashboard() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row min-h-[85vh] gap-6 fade-in pt-16">
+    <div className="flex flex-col md:flex-row min-h-[85vh] gap-6 fade-in pb-[calc(max(env(safe-area-inset-bottom,0px),8px)+4.5rem)] md:pb-12">
       {/* Sidebar */}
       <div className="w-full md:w-64 space-y-4">
         <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-5 shadow-2xl">
