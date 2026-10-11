@@ -76,6 +76,46 @@ async function main() {
   const hunger = await createShop('Hunger Express', hungerArea.id);
   const gymkhana = await createShop('Gymkhana Food Club', gymkhanaArea.id);
 
+  // --- SEPARATE LOGIN CREDENTIALS FOR EACH STALL ---
+  const stallStaffList = [
+    { name: 'Gazebo 1 Staff', email: 'staff.gazebo1@campusbites.com', shopId: g1.id },
+    { name: 'Gazebo 2 Staff', email: 'staff.gazebo2@campusbites.com', shopId: g2.id },
+    { name: 'Fresh Juices Staff', email: 'staff.freshjuices@campusbites.com', shopId: freshJuices.id },
+    { name: 'Sri Outlet Staff', email: 'staff.sri@campusbites.com', shopId: sri.id },
+    { name: 'North Square Diner Staff', email: 'staff.nsdiner@campusbites.com', shopId: nsDiner.id },
+    { name: 'Campus Bakers Staff', email: 'staff.bakers@campusbites.com', shopId: bakers.id },
+    { name: 'South Corner Staff', email: 'staff.southcorner@campusbites.com', shopId: southCorner.id },
+    { name: 'Hunger Express Staff', email: 'staff.hunger@campusbites.com', shopId: hunger.id },
+    { name: 'Gymkhana Food Club Staff', email: 'staff.gymkhana@campusbites.com', shopId: gymkhana.id },
+  ];
+
+  for (const s of stallStaffList) {
+    const sUser = await prisma.user.upsert({
+      where: { email: s.email },
+      update: { fullName: s.name, passwordHash },
+      create: { fullName: s.name, email: s.email, passwordHash }
+    });
+
+    await prisma.userRole.upsert({
+      where: { userId_roleId: { userId: sUser.id, roleId: roleStaff.id } },
+      update: {},
+      create: { userId: sUser.id, roleId: roleStaff.id }
+    });
+
+    await prisma.shopStaff.upsert({
+      where: { shopId_staffId: { shopId: s.shopId, staffId: sUser.id } },
+      update: {},
+      create: { shopId: s.shopId, staffId: sUser.id }
+    });
+  }
+
+  // Link legacy common staff to Gazebo 1 as backup
+  await prisma.shopStaff.upsert({
+    where: { shopId_staffId: { shopId: g1.id, staffId: staff.id } },
+    update: {},
+    create: { shopId: g1.id, staffId: staff.id }
+  });
+
   // Categories
   const getCat = async (name: string) => {
     return prisma.category.upsert({

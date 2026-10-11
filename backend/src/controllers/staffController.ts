@@ -18,8 +18,25 @@ export const getStaffOrders = async (req: AuthRequest, res: Response): Promise<v
         const staffId = req.user?.userId;
         if (!staffId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
+        let shopId = req.user?.shopId;
+        if (!shopId) {
+            const ss = await prisma.shopStaff.findFirst({ where: { staffId } });
+            shopId = ss?.shopId;
+        }
+
+        // Owners can pass ?shopId=... or view all; Staff is strictly scoped to their stall
+        const queryShopId = req.query.shopId ? Number(req.query.shopId) : undefined;
+        const targetShopId = (req.user?.role === 'OWNER' && queryShopId) ? queryShopId : shopId;
+
+        const whereClause: any = {
+            status: { notIn: ['COMPLETED', 'CANCELLED', 'PAYMENT_FAILED'] }
+        };
+        if (targetShopId) {
+            whereClause.shopId = targetShopId;
+        }
+
         const orders = await prisma.order.findMany({
-            where: { status: { notIn: ['COMPLETED', 'CANCELLED', 'PAYMENT_FAILED'] } },
+            where: whereClause,
             include: { shop: true, items: { include: { item: true } }, customer: true },
             orderBy: { orderTime: 'asc' }
         });
@@ -35,8 +52,24 @@ export const getStaffOrderHistory = async (req: AuthRequest, res: Response): Pro
         const staffId = req.user?.userId;
         if (!staffId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
+        let shopId = req.user?.shopId;
+        if (!shopId) {
+            const ss = await prisma.shopStaff.findFirst({ where: { staffId } });
+            shopId = ss?.shopId;
+        }
+
+        const queryShopId = req.query.shopId ? Number(req.query.shopId) : undefined;
+        const targetShopId = (req.user?.role === 'OWNER' && queryShopId) ? queryShopId : shopId;
+
+        const whereClause: any = {
+            status: { in: ['COMPLETED', 'CANCELLED'] }
+        };
+        if (targetShopId) {
+            whereClause.shopId = targetShopId;
+        }
+
         const orders = await prisma.order.findMany({
-            where: { status: { in: ['COMPLETED', 'CANCELLED'] } },
+            where: whereClause,
             include: { shop: true, items: { include: { item: true } }, customer: true },
             orderBy: { orderTime: 'desc' },
             take: 50
@@ -61,6 +94,19 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
         // Fetch the current order
         const order = await prisma.order.findUnique({ where: { id: Number(orderId) } });
         if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
+
+        // Verify stall authorization if staff
+        if (req.user?.role === 'STAFF') {
+            let shopId = req.user?.shopId;
+            if (!shopId) {
+                const ss = await prisma.shopStaff.findFirst({ where: { staffId } });
+                shopId = ss?.shopId;
+            }
+            if (shopId && order.shopId !== shopId) {
+                res.status(403).json({ error: 'Unauthorized: You can only update orders for your assigned stall' });
+                return;
+            }
+        }
 
         // Validate state machine transition
         const allowed = VALID_TRANSITIONS[order.status];

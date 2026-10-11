@@ -7,7 +7,9 @@ dotenv.config();
 export interface AuthRequest extends Request {
     user?: {
         userId: number;
-        role: string; // simplifying for now, can be array of roles
+        role: string;
+        shopId?: number;
+        shopName?: string;
     };
 }
 

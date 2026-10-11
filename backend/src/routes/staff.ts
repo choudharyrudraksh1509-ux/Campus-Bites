@@ -8,5 +8,6 @@ router.use(authenticateToken);
 router.get('/orders', getStaffOrders);
 router.get('/orders/history', getStaffOrderHistory);
 router.patch('/orders/:orderId/status', updateOrderStatus);
+router.put('/orders/:orderId/status', updateOrderStatus);
 
 export default router;

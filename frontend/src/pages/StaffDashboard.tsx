@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Utensils, RefreshCw, Check } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Utensils, RefreshCw, Check, Store } from 'lucide-react';
 import api from '../services/api';
 
 export default function StaffDashboard() {
@@ -32,7 +32,8 @@ export default function StaffDashboard() {
 
   const fetchMenu = async () => {
     try {
-      const res = await api.get('/shops/1/menu'); // Defaulting to shop 1 for demo
+      const stallShopId = user?.shopId || 1;
+      const res = await api.get(`/shops/${stallShopId}/menu`);
       setMenu(res.data);
     } catch (err) {
       console.error(err);
@@ -73,8 +74,12 @@ export default function StaffDashboard() {
       {/* Sidebar */}
       <div className="w-full md:w-64 space-y-4">
         <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-5 shadow-2xl">
-          <div className="text-xs uppercase tracking-wider text-white/50 mb-1">Staff Portal</div>
-          <div className="font-medium text-white">{user?.name}</div>
+          <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-[#930E36]/30 border border-[#930E36]/50 text-[#FF004B] text-[11px] font-medium mb-2">
+            <Store size={12} />
+            <span>{user?.shopName || 'Staff Portal'}</span>
+          </div>
+          <div className="font-semibold text-white text-sm">{user?.name}</div>
+          <div className="text-[11px] text-white/50 font-mono mt-0.5">{user?.email}</div>
         </div>
         
         <div className="space-y-1.5 bg-[#1D1D21] border border-white/5 rounded-2xl p-2 shadow-2xl">
@@ -100,9 +105,17 @@ export default function StaffDashboard() {
       <div className="flex-1 bg-[#1D1D21] border border-white/5 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="border-b border-white/5 p-5 flex justify-between items-center bg-white/[0.02]">
-          <h2 className="text-sm font-semibold tracking-wide text-white uppercase">
-            {activeTab === 'orders' ? 'Live Order Feed' : 'Menu Management'}
-          </h2>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-sm font-semibold tracking-wide text-white uppercase">
+              {activeTab === 'orders' ? 'Live Order Feed' : 'Menu Management'}
+            </h2>
+            {user?.shopName && (
+              <>
+                <span className="text-xs text-white/30">•</span>
+                <span className="text-xs text-[#FF004B] font-medium">{user.shopName}</span>
+              </>
+            )}
+          </div>
           <button onClick={activeTab === 'orders' ? fetchOrders : fetchMenu} className="text-white/50 hover:text-white transition-colors flex items-center space-x-1.5 text-xs bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg shadow-sm">
             <RefreshCw size={12} />
             <span>Refresh</span>
@@ -116,7 +129,7 @@ export default function StaffDashboard() {
               {orders.length === 0 ? (
                 <div className="text-center py-16 text-white/30 border border-white/5 border-dashed rounded-xl">
                   <ShoppingBag size={32} className="mx-auto mb-3 opacity-50" />
-                  <p className="text-sm">No active orders right now.</p>
+                  <p className="text-sm">No active orders for {user?.shopName || 'your stall'} right now.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

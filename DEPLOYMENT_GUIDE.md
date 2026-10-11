@@ -89,3 +89,22 @@ npx tsx prisma/seed.ts
 ## Authentication Gate Flow Overview
 - Any unauthenticated user accessing `http://localhost:5173/` or any route is instantly presented with the **Login / Sign Up** page (`/login`).
 - After entering valid VIT credentials (`@vitstudent.ac.in`), the user is authenticated, assigned a JWT session, and granted access to browse Campus Outlets & place takeaway orders.
+
+---
+
+## Stall-Specific Staff Login Credentials
+Instead of a single common staff login, each campus stall feeded in the system has dedicated login credentials. Staff select their stall from the dropdown in the Staff Login tab:
+
+| Stall / Outlet | Staff ID / Email | Password |
+|---|---|---|
+| **Gazebo 1** | `staff.gazebo1@campusbites.com` | `password123` |
+| **Gazebo 2** | `staff.gazebo2@campusbites.com` | `password123` |
+| **Fresh Juices - Healthy & Tasty** | `staff.freshjuices@campusbites.com` | `password123` |
+| **Sri Outlet** | `staff.sri@campusbites.com` | `password123` |
+| **North Square Diner** | `staff.nsdiner@campusbites.com` | `password123` |
+| **Campus Bakers** | `staff.bakers@campusbites.com` | `password123` |
+| **South Corner** | `staff.southcorner@campusbites.com` | `password123` |
+| **Hunger Express** | `staff.hunger@campusbites.com` | `password123` |
+| **Gymkhana Food Club** | `staff.gymkhana@campusbites.com` | `password123` |
+| **Owner (All Stalls)** | `owner@campusbites.com` | `password123` |
+
