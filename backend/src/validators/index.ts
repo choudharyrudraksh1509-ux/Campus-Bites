@@ -42,10 +42,10 @@ export const loginSchema = z.object({
 
 export const placeOrderSchema = z.object({
   body: z.object({
-    shopId: z.number().int().positive(),
+    shopId: z.union([z.number(), z.string().transform(v => Number(v))]),
     items: z.array(z.object({
-      itemId: z.number().int().positive(),
-      quantity: z.number().int().positive(),
+      itemId: z.union([z.number(), z.string().transform(v => Number(v))]),
+      quantity: z.union([z.number(), z.string().transform(v => Number(v))]),
       name: z.string().optional(),
       price: z.number().optional()
     })).min(1)

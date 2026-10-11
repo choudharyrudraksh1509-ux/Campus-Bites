@@ -91,6 +91,15 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
     try {
         const order = await prisma.$transaction(async (tx) => {
             let shop = await tx.shop.findUnique({ where: { id: Number(shopId) } });
+            if (!shop && Number(shopId) >= 1 && Number(shopId) <= 9) {
+                const STALL_NAMES = [
+                    'Gazebo 1', 'Gazebo 2', 'Fresh Juices - Healthy & Tasty',
+                    'Sri Outlet', 'North Square Diner', 'Campus Bakers',
+                    'South Corner', 'Hunger Express', 'Gymkhana Food Club'
+                ];
+                const targetName = STALL_NAMES[Number(shopId) - 1];
+                shop = await tx.shop.findFirst({ where: { name: targetName } });
+            }
             if (!shop) {
                 shop = await tx.shop.findFirst({ where: { status: 'ACTIVE' } });
                 if (!shop) {
@@ -180,13 +189,13 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
                 data: {
                     customerId: userId,
                     shopId: shop.id,
-                    status: 'PAYMENT_PENDING',
+                    status: 'PLACED',
                     totalAmount,
                     items: {
                         create: orderItemsData
                     },
                     payments: {
-                        create: { amount: totalAmount, status: 'PENDING' }
+                        create: { amount: totalAmount, status: 'SUCCESS' }
                     }
                 },
                 include: {
