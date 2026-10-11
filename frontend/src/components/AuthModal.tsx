@@ -93,7 +93,15 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
         }}
         className="bg-[#4C1829] text-white w-full h-full sm:h-auto sm:max-w-md sm:rounded-3xl p-6 sm:p-8 shadow-none sm:shadow-[0_30px_70px_rgba(0,0,0,0.9)] border-0 sm:border border-[#930E36] relative overflow-hidden flex flex-col justify-center"
       >
-        <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-20 pointer-events-none mix-blend-overlay"></div>
+        {/* Yellow Dots Pattern Overlay - Confined strictly to upper header region */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[220px] pointer-events-none bg-no-repeat bg-top bg-cover opacity-90 z-0"
+          style={{
+            backgroundImage: "url('/yellow-dots.png')",
+            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)'
+          }}
+        ></div>
         
         <div className="relative z-10">
           {/* Top Close Button */}

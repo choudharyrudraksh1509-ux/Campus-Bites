@@ -39,17 +39,17 @@ html, body {
     top: 0;
     left: 0;
     right: 0;
-    height: 550px;
-    max-height: 60vh;
-    background-image: url('/bg-pattern.png');
-    background-size: 500px auto;
+    height: 480px;
+    max-height: 50vh;
+    background-image: url('/yellow-dots.png');
+    background-size: 550px auto;
     background-repeat: repeat-x;
     background-position: top center;
-    opacity: 0.75;
+    opacity: 0.85;
     z-index: -1;
     pointer-events: none;
-    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
-    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0) 100%);
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 100%);
   }
 
   .bg-small-dots {
