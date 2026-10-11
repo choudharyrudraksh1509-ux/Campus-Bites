@@ -611,7 +611,7 @@ export default function Menu() {
                       <span className="text-white">₹{cartSubtotal}</span>
                     </div>
                     <div className="flex justify-between text-white/90">
-                      <span>Container / Packaging</span>
+                      <span>Packaging Fee</span>
                       <span className="text-white">₹{packagingFee}</span>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-[#930E36]/50 text-sm text-white">
@@ -730,20 +730,20 @@ export default function Menu() {
                   <div
                     onClick={() => setPaymentMethod('UPI')}
                     className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
-                      paymentMethod === 'UPI' ? 'border-[#930E36] bg-[#930E36]/40 text-white font-medium' : 'border-white/20 hover:bg-white/10 text-white/80'
+                      paymentMethod === 'UPI' ? 'border-[#930E36] bg-[#930E36]/40 text-white font-medium' : 'border-[#930E36]/30 hover:bg-white/10 text-white/80'
                     }`}
                   >
-                    <span>UPI Payment (Google Pay / PhonePe / Paytm)</span>
+                    <span>UPI Payment (GPay, PhonePe, Paytm)</span>
                     {paymentMethod === 'UPI' && <CheckCircle2 size={16} className="text-white" />}
                   </div>
 
                   <div
                     onClick={() => setPaymentMethod('CARD')}
                     className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
-                      paymentMethod === 'CARD' ? 'border-[#930E36] bg-[#930E36]/40 text-white font-medium' : 'border-white/20 hover:bg-white/10 text-white/80'
+                      paymentMethod === 'CARD' ? 'border-[#930E36] bg-[#930E36]/40 text-white font-medium' : 'border-[#930E36]/30 hover:bg-white/10 text-white/80'
                     }`}
                   >
-                    <span>Credit / Debit Card</span>
+                    <span>Debit Card</span>
                     {paymentMethod === 'CARD' && <CheckCircle2 size={16} className="text-white" />}
                   </div>
 

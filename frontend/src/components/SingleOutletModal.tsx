@@ -19,12 +19,20 @@ export default function SingleOutletModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-[#FF004B] text-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.8)] border border-white/30 text-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-15 pointer-events-none mix-blend-overlay"></div>
+      <div className="bg-[#4C1829] text-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.95)] border border-[#930E36] text-center relative overflow-hidden">
+        {/* Yellow Dots Pattern Overlay - Confined strictly to upper header region */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[180px] pointer-events-none bg-no-repeat bg-top bg-cover opacity-90 z-0"
+          style={{
+            backgroundImage: "url('/yellow-dots.png')",
+            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)'
+          }}
+        ></div>
         
         <div className="relative z-10">
           {/* Warning Icon Badge */}
-          <div className="w-14 h-14 bg-white/20 text-white rounded-3xl flex items-center justify-center mx-auto mb-4 border border-white/30 shadow-md">
+          <div className="w-14 h-14 bg-[#930E36]/50 text-white rounded-3xl flex items-center justify-center mx-auto mb-4 border border-[#930E36] shadow-md">
             <AlertTriangle size={28} />
           </div>
 
@@ -38,7 +46,7 @@ export default function SingleOutletModal({
             Bites only allows ordering from <strong className="text-white">one outlet per takeaway order</strong> for fast counter pickup.
           </p>
 
-          <div className="my-5 p-3 rounded-2xl bg-white/15 border border-white/30 text-xs text-white flex items-center justify-center space-x-2">
+          <div className="my-5 p-3 rounded-2xl bg-[#930E36]/30 border border-[#930E36]/60 text-xs text-white flex items-center justify-center space-x-2">
             <span>{currentShopName}</span>
             <span className="text-white/60 uppercase text-[10px]">switch to</span>
             <span className="text-white">{newShopName}</span>
@@ -47,13 +55,13 @@ export default function SingleOutletModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <button
               onClick={onCancel}
-              className="w-full py-3 bg-white/20 hover:bg-white/30 text-white text-xs rounded-2xl transition-colors uppercase tracking-wider border border-white/30"
+              className="w-full py-3 bg-[#930E36]/30 hover:bg-[#930E36]/50 text-white text-xs rounded-2xl transition-colors uppercase tracking-wider border border-[#930E36]/70"
             >
               Keep Cart
             </button>
             <button
               onClick={onConfirmClear}
-              className="w-full py-3 bg-white hover:bg-white/95 text-[#FF004B] text-xs rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-1.5 uppercase tracking-wider"
+              className="w-full py-3 bg-white hover:bg-white/95 text-[#4C1829] font-medium text-xs rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-1.5 uppercase tracking-wider"
             >
               <Trash2 size={16} />
               <span>Clear & Switch</span>

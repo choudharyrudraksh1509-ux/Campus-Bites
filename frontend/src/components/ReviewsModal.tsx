@@ -357,14 +357,14 @@ export default function ReviewsModal({
 
                   <div>
                     <label className="block text-xs text-white/80 mb-1.5 uppercase tracking-wider">
-                      Comments / Thoughts (Optional)
+                      Comments (Optional)
                     </label>
                     <textarea
                       rows={3}
                       value={userComment}
                       onChange={(e) => setUserComment(e.target.value)}
                       placeholder="e.g. Crispy veg burger was great, takeaway was ready right on time!"
-                      className="w-full p-3 bg-black/30 border border-white/15 rounded-2xl text-xs text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      className="w-full p-3 bg-black/30 border border-[#930E36]/40 rounded-2xl text-xs text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     />
                   </div>
 

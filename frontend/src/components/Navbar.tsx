@@ -191,7 +191,7 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
           paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 14px)',
           paddingTop: '8px'
         }}
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-t border-white/10 px-2 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.5)]"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-t border-[#930E36]/30 px-2 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.5)]"
       >
         <Link
           to="/"

@@ -126,7 +126,12 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
         try {
           const res = await api.post('/orders', {
             shopId: shopId,
-            items: cart.map(c => ({ itemId: c.id, quantity: c.quantity }))
+            items: cart.map(c => ({
+              itemId: c.id,
+              quantity: c.quantity,
+              name: c.name,
+              price: c.price
+            }))
           });
           if (res.data?.orderId) {
             orderId = res.data.orderId;
@@ -337,7 +342,7 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
                   <span className="text-white font-medium">₹{cartSubtotal}</span>
                 </div>
                 <div className="flex justify-between text-white/80">
-                  <span>Container / Packaging Fee</span>
+                  <span>Packaging Fee</span>
                   <span className="text-white font-medium">₹{packagingFee}</span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-[#930E36]/60 text-sm font-medium text-white">
@@ -439,7 +444,7 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
                 >
                   <div className="flex items-center space-x-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span>UPI Payment (Google Pay / PhonePe / Paytm)</span>
+                    <span>UPI Payment (GPay, PhonePe, Paytm)</span>
                   </div>
                   {paymentMethod === 'UPI' && <CheckCircle2 size={16} className="text-white" />}
                 </div>
@@ -454,7 +459,7 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
                 >
                   <div className="flex items-center space-x-2">
                     <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-                    <span>Credit / Debit Card</span>
+                    <span>Debit Card</span>
                   </div>
                   {paymentMethod === 'CARD' && <CheckCircle2 size={16} className="text-white" />}
                 </div>

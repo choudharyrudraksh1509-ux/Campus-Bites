@@ -108,7 +108,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
     }
   };
 
-  const roleName = user?.role === 'CUSTOMER' ? 'STUDENT / CUSTOMER' : user?.role || 'CUSTOMER';
+  const roleName = user?.role === 'CUSTOMER' ? 'STUDENT' : user?.role || 'STUDENT';
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#4C1829] sm:bg-black/80 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center p-0 sm:p-4 animate-fade-in">

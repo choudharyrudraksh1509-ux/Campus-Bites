@@ -161,10 +161,10 @@ export default function Orders() {
                 className={`px-4 py-2 rounded-2xl text-xs uppercase tracking-wider font-medium transition-all ${
                   activeFilter === tab
                     ? 'bg-[#4C1829] text-white border border-[#930E36] shadow-lg'
-                    : 'bg-[#1D1D21]/80 text-white/70 hover:text-white border border-white/10'
+                    : 'bg-[#1D1D21]/80 text-white/70 hover:text-white border border-[#930E36]/30'
                 }`}
               >
-                {tab === 'ALL' ? 'All Orders' : tab === 'ACTIVE' ? 'Active / Preparing' : 'Past / Completed'}
+                {tab === 'ALL' ? 'All Orders' : tab === 'ACTIVE' ? 'Active Orders' : 'Past Orders'}
                 <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] bg-white/20">
                   {count}
                 </span>
@@ -221,16 +221,24 @@ export default function Orders() {
             return (
               <div
                 key={order.order_id}
-                className="bg-[#4C1829] text-white border border-[#930E36] rounded-3xl p-6 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_10px_30px_rgba(76,24,41,0.6)] space-y-5 relative overflow-hidden transition-all"
+                className="bg-[#4C1829] text-white border border-[#930E36] rounded-3xl p-5 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_10px_30px_rgba(76,24,41,0.6)] space-y-5 relative overflow-hidden transition-all"
               >
-                <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-20 pointer-events-none mix-blend-overlay"></div>
+                {/* Yellow Dots Pattern Overlay - Confined strictly to upper header region */}
+                <div
+                  className="absolute top-0 left-0 right-0 h-[160px] pointer-events-none bg-no-repeat bg-top bg-cover opacity-90 z-0"
+                  style={{
+                    backgroundImage: "url('/yellow-dots.png')",
+                    maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%)'
+                  }}
+                ></div>
 
                 <div className="relative z-10 space-y-5">
                   {/* Card Top Info */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#930E36]/60 pb-4 gap-3">
                     <div>
                       <div className="flex items-center space-x-2.5">
-                        <span className="font-mono text-xs font-semibold text-white/90 bg-white/10 px-2 py-0.5 rounded-md">
+                        <span className="font-mono text-xs font-semibold text-white/90 bg-[#930E36]/40 px-2 py-0.5 rounded-md border border-[#930E36]/60">
                           #ORD-{order.order_id}
                         </span>
                         <span className="text-xs text-white/70 flex items-center space-x-1">
@@ -246,7 +254,7 @@ export default function Orders() {
 
                     {/* Prominent Pickup Token Badge */}
                     <div className="flex items-center space-x-2 self-start sm:self-auto">
-                      <div className="bg-white text-[#4C1829] font-bold px-4 py-2.5 rounded-2xl text-xs sm:text-sm tracking-wider shadow-lg flex items-center space-x-2 border border-white/50">
+                      <div className="bg-white text-[#4C1829] font-bold px-4 py-2.5 rounded-2xl text-xs sm:text-sm tracking-wider shadow-lg flex items-center space-x-2 border border-transparent">
                         <Clock size={16} className="text-[#4C1829]" />
                         <span>Pickup Token: {order.pickup_token}</span>
                       </div>
@@ -255,10 +263,10 @@ export default function Orders() {
 
                   {/* Status Progress Stepper */}
                   {!isCancelled ? (
-                    <div className="bg-[#930E36]/30 backdrop-blur-md border border-[#930E36]/50 rounded-2xl p-4 sm:p-5 space-y-3">
-                      <div className="flex justify-between items-center text-[11px] sm:text-xs uppercase tracking-wider text-white">
+                    <div className="bg-[#930E36]/30 backdrop-blur-md border border-[#930E36]/50 rounded-2xl p-3.5 sm:p-5 space-y-3">
+                      <div className="flex justify-between items-center text-[10px] sm:text-xs uppercase tracking-tight sm:tracking-wider text-white gap-1 overflow-x-hidden">
                         <span
-                          className={`flex items-center space-x-1 ${
+                          className={`flex items-center space-x-1 whitespace-nowrap shrink-0 ${
                             order.status === 'PLACED'
                               ? 'text-white font-bold underline'
                               : progress.step > 1
@@ -266,12 +274,12 @@ export default function Orders() {
                               : 'text-white/60'
                           }`}
                         >
-                          <CheckCircle2 size={13} />
+                          <CheckCircle2 size={12} className="shrink-0" />
                           <span>1. Placed</span>
                         </span>
 
                         <span
-                          className={`flex items-center space-x-1 ${
+                          className={`flex items-center space-x-1 whitespace-nowrap shrink-0 ${
                             order.status === 'PREPARING'
                               ? 'text-white font-bold underline'
                               : progress.step > 2
@@ -279,12 +287,12 @@ export default function Orders() {
                               : 'text-white/60'
                           }`}
                         >
-                          <ChefHat size={13} />
+                          <ChefHat size={12} className="shrink-0" />
                           <span>2. Preparing</span>
                         </span>
 
                         <span
-                          className={`flex items-center space-x-1 ${
+                          className={`flex items-center space-x-1 whitespace-nowrap shrink-0 ${
                             order.status === 'READY'
                               ? 'text-white font-bold underline'
                               : progress.step > 3
@@ -292,18 +300,18 @@ export default function Orders() {
                               : 'text-white/60'
                           }`}
                         >
-                          <PackageCheck size={13} />
-                          <span>3. Ready for Pickup</span>
+                          <PackageCheck size={12} className="shrink-0" />
+                          <span>3. Ready<span className="hidden sm:inline"> for Pickup</span></span>
                         </span>
 
                         <span
-                          className={`flex items-center space-x-1 ${
+                          className={`flex items-center space-x-1 whitespace-nowrap shrink-0 ${
                             order.status === 'COMPLETED'
                               ? 'text-white font-bold underline'
                               : 'text-white/60'
                           }`}
                         >
-                          <CheckCheck size={13} />
+                          <CheckCheck size={12} className="shrink-0" />
                           <span>4. Handover</span>
                         </span>
                       </div>
@@ -345,8 +353,8 @@ export default function Orders() {
                   )}
 
                   {/* Itemized Order Details */}
-                  <div className="bg-black/20 rounded-2xl p-4 space-y-2.5 border border-white/5">
-                    <div className="text-[11px] uppercase tracking-wider text-white/70 font-medium border-b border-white/10 pb-1.5 flex justify-between">
+                  <div className="bg-black/25 rounded-2xl p-4 space-y-2.5 border border-[#930E36]/30">
+                    <div className="text-[11px] uppercase tracking-wider text-white/80 font-medium border-b border-[#930E36]/40 pb-1.5 flex justify-between">
                       <span>Ordered Items</span>
                       <span>Amount</span>
                     </div>

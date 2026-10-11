@@ -183,18 +183,18 @@ export default function Login({ onSuccess }: LoginProps) {
           </div>
 
           {/* Student vs Staff Mode Switcher */}
-          <div className="flex justify-center space-x-4 mb-4 border-b border-white/10 pb-4">
+          <div className="flex justify-center space-x-6 mb-4 pb-2">
             <button
               onClick={() => { setLoginType('USER'); setIsRegister(false); setError(''); setEmail(''); setSelectedStallId(''); }}
-              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'USER' ? 'text-white border-b-2 border-white pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
+              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'USER' ? 'text-white border-b-2 border-[#930E36] pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
             >
               User Login
             </button>
             <button
               onClick={() => { setLoginType('STAFF'); setIsRegister(false); setError(''); }}
-              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'STAFF' ? 'text-white border-b-2 border-white pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
+              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'STAFF' ? 'text-white border-b-2 border-[#930E36] pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
             >
-              Staff / Stall Login
+              Staff Login
             </button>
           </div>
           
@@ -238,7 +238,7 @@ export default function Login({ onSuccess }: LoginProps) {
             {loginType === 'STAFF' && (
               <div>
                 <label className="block text-xs text-white/80 mb-1.5 uppercase tracking-wider flex items-center justify-between">
-                  <span>SELECT YOUR STALL / OUTLET</span>
+                  <span>SELECT YOUR STALL</span>
                   <span className="text-[10px] text-white/50 normal-case">Step 1: Choose stall</span>
                 </label>
                 <div className="relative">
@@ -255,20 +255,20 @@ export default function Login({ onSuccess }: LoginProps) {
                       </option>
                     ))}
                     <option value="owner" className="bg-[#4C1829] text-white">
-                      Campus Administrator / Owner
+                      Campus Administrator
                     </option>
                   </select>
                   <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
                 </div>
 
                 {selectedStallId && selectedStallId !== 'owner' && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white/80 flex items-center justify-between">
+                  <div className="mt-2 p-2.5 rounded-xl bg-white/5 border border-[#930E36]/40 text-[11px] text-white/80 flex items-center justify-between">
                     <span className="font-mono text-white/90">ID: {email}</span>
                     <span className="text-white/60">Pass: password123</span>
                   </div>
                 )}
                 {selectedStallId === 'owner' && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white/80 flex items-center justify-between">
+                  <div className="mt-2 p-2.5 rounded-xl bg-white/5 border border-[#930E36]/40 text-[11px] text-white/80 flex items-center justify-between">
                     <span className="font-mono text-white/90">ID: owner@campusbites.com</span>
                     <span className="text-white/60">Pass: password123</span>
                   </div>
@@ -295,7 +295,7 @@ export default function Login({ onSuccess }: LoginProps) {
 
             <div>
               <label className="block text-xs text-white/80 mb-1.5 uppercase tracking-wider">
-                {loginType === 'USER' ? 'USER EMAIL (@vitstudent.ac.in)' : 'STALL STAFF ID / EMAIL'}
+                {loginType === 'USER' ? 'USER EMAIL (@vitstudent.ac.in)' : 'STALL STAFF ID'}
               </label>
               <div className="relative">
                 <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />

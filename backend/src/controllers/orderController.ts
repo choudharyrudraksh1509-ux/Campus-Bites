@@ -2,6 +2,83 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../db/prisma';
 
+const BACKEND_KNOWN_ITEMS: Record<number, { name: string; price: number }> = {
+    101: { name: 'Crispy Veg Cheese Burger', price: 85 },
+    102: { name: 'Paneer Loaded Fries', price: 95 },
+    103: { name: 'Double Cheese Pizza', price: 150 },
+    104: { name: 'Cold Coffee with Ice Cream', price: 70 },
+    201: { name: 'Chicken Kathi Roll', price: 110 },
+    202: { name: 'Chicken Cheese Burger', price: 110 },
+    203: { name: 'Hot & Spicy Wings', price: 140 },
+    301: { name: 'Hot Tea', price: 15 },
+    302: { name: 'Hot Coffee', price: 15 },
+    303: { name: 'Filter Coffee', price: 25 },
+    304: { name: 'Badam Malt', price: 30 },
+    305: { name: 'Nannari Sarbath', price: 30 },
+    306: { name: 'Fresh Buttermilk', price: 30 },
+    307: { name: 'Rosemilk', price: 50 },
+    308: { name: 'Sugarcane Juice', price: 40 },
+    309: { name: 'Vazhaithandu Juice', price: 50 },
+    310: { name: 'Carrot Juice', price: 50 },
+    311: { name: 'Beetroot Juice', price: 50 },
+    312: { name: 'Pineapple Milkshake', price: 70 },
+    313: { name: 'Banana Milkshake', price: 70 },
+    314: { name: 'Strawberry Milkshake', price: 80 },
+    315: { name: 'Pomegranate Milkshake', price: 80 },
+    316: { name: 'Chiku Milkshake', price: 80 },
+    317: { name: 'Mango Milkshake', price: 80 },
+    318: { name: 'Idli (2 Pcs)', price: 35 },
+    319: { name: 'Set Dosa', price: 50 },
+    320: { name: 'Adai Dosa (4 Dhalls)', price: 60 },
+    321: { name: 'Curry Leaf Dosa', price: 60 },
+    322: { name: 'Drumstick Leaf Dosa', price: 60 },
+    323: { name: 'Ragi Dosa', price: 60 },
+    324: { name: 'Kambu Dosa', price: 60 },
+    325: { name: 'Dhall Podi Dosa (Sesame)', price: 70 },
+    326: { name: 'Egg Dosa', price: 70 },
+    327: { name: 'Regular Chicken Shawarma', price: 90 },
+    328: { name: 'Spl. Whole Chicken Shawarma', price: 130 },
+    329: { name: 'Masala Poori', price: 50 },
+    330: { name: 'Dahi Bhel Poori', price: 60 },
+    331: { name: 'Pani Poori', price: 50 },
+    332: { name: 'Sev Poori', price: 50 },
+    333: { name: 'Channa Samosa', price: 50 },
+    334: { name: 'Dahi Samosa', price: 50 },
+    335: { name: 'Cutlet Channa', price: 50 },
+    336: { name: 'Aloo Chaat', price: 50 },
+    337: { name: 'Mushroom Fry Masala', price: 50 },
+    338: { name: 'Vada Pav', price: 50 },
+    339: { name: 'Pav Bhaji', price: 70 },
+    340: { name: 'Sundal (Channa)', price: 30 },
+    341: { name: 'Vegetable Cutlet (2 Pcs)', price: 30 },
+    342: { name: 'Veg Samosa (2 Pcs)', price: 30 },
+    343: { name: 'Kuzhi Paniyaram (4 Pcs)', price: 30 },
+    344: { name: 'Keerai Vadai (2 Pcs)', price: 30 },
+    345: { name: 'Veg Bajji (3 Pcs)', price: 30 },
+    346: { name: 'Spring Potato', price: 50 },
+    347: { name: 'Potato Pops', price: 50 },
+    401: { name: 'Masala Maggi', price: 45 },
+    402: { name: 'Cheese Butter Maggi', price: 65 },
+    403: { name: 'Veg Puff', price: 25 },
+    404: { name: 'Egg Puff', price: 30 },
+    405: { name: 'Ginger Chai', price: 20 },
+    501: { name: 'Chole Bhature (2 Pcs)', price: 90 },
+    502: { name: 'Special Pav Bhaji', price: 80 },
+    503: { name: 'Aloo Paratha with Curd', price: 70 },
+    601: { name: 'Grilled Veg Sandwich', price: 60 },
+    602: { name: 'Paneer Tikka Sandwich', price: 85 },
+    603: { name: 'Chocolate Brownie', price: 50 },
+    701: { name: 'Masala Dosa', price: 60 },
+    702: { name: 'Ghee Podi Idli (4 Pcs)', price: 55 },
+    703: { name: 'Medu Vada (2 Pcs)', price: 40 },
+    801: { name: 'Veg Manchurian Roll', price: 75 },
+    802: { name: 'Honey Chilli Potato', price: 90 },
+    803: { name: 'Crispy Veg Burger', price: 70 },
+    901: { name: 'Paneer Butter Masala Combo', price: 140 },
+    902: { name: 'Butter Naan (2 Pcs)', price: 50 },
+    903: { name: 'Veg Dum Biryani', price: 130 },
+};
+
 export const placeOrder = async (req: AuthRequest, res: Response): Promise<void> => {
     const { shopId, items } = req.body;
     const userId = req.user?.userId;
@@ -56,12 +133,13 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
                 let food = await tx.foodItem.findUnique({ where: { id: itemIdNum } });
 
                 if (!food || food.shopId !== shop.id) {
-                    const fallbackName = (item.name && String(item.name).trim())
+                    const knownItem = BACKEND_KNOWN_ITEMS[itemIdNum];
+                    const fallbackName = (item.name && String(item.name).trim() && !String(item.name).startsWith('Campus Special'))
                         ? String(item.name).trim()
-                        : (food ? food.name : `Campus Special #${itemIdNum}`);
+                        : (knownItem ? knownItem.name : (food ? food.name : 'Takeaway Special'));
                     const fallbackPrice = (item.price && Number(item.price) > 0)
                         ? Number(item.price)
-                        : (food && food.price > 0 ? food.price : 60);
+                        : (knownItem ? knownItem.price : (food && food.price > 0 ? food.price : 60));
 
                     let existingItemInShop = await tx.foodItem.findFirst({
                         where: { shopId: shop.id, name: fallbackName }
