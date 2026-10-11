@@ -85,8 +85,14 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-[#4C1829] text-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.9)] border border-[#930E36] relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#4C1829] sm:bg-black/80 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center p-0 sm:p-4 animate-fade-in">
+      <div
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 24px)',
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)'
+        }}
+        className="bg-[#4C1829] text-white w-full h-full sm:h-auto sm:max-w-md sm:rounded-3xl p-6 sm:p-8 shadow-none sm:shadow-[0_30px_70px_rgba(0,0,0,0.9)] border-0 sm:border border-[#930E36] relative overflow-hidden flex flex-col justify-center"
+      >
         <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-20 pointer-events-none mix-blend-overlay"></div>
         
         <div className="relative z-10">

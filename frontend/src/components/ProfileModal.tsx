@@ -111,21 +111,19 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
   const roleName = user?.role === 'CUSTOMER' ? 'STUDENT / CUSTOMER' : user?.role || 'CUSTOMER';
 
   return (
-    <div className="fixed inset-0 z-50 flex sm:items-center items-end justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#4C1829] sm:bg-black/80 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center p-0 sm:p-4 animate-fade-in">
       <div
         style={{
-          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 1.5rem)'
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)',
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 20px)'
         }}
-        className="bg-[#4C1829] text-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.9)] border-t sm:border border-[#930E36] relative overflow-hidden max-h-[92vh] overflow-y-auto"
+        className="bg-[#4C1829] text-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl p-5 sm:p-8 shadow-none sm:shadow-[0_30px_70px_rgba(0,0,0,0.9)] border-0 sm:border border-[#930E36] relative overflow-hidden flex flex-col"
       >
         <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-15 pointer-events-none mix-blend-overlay"></div>
 
-        {/* Native mobile drag indicator pill */}
-        <div className="w-12 h-1 bg-white/25 rounded-full mx-auto mb-3 shrink-0 sm:hidden" />
-
-        <div className="relative z-10">
+        <div className="relative z-10 flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-[#930E36]/50">
+          <div className="flex items-center justify-between pb-4 border-b border-[#930E36]/50 shrink-0">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#930E36] to-[#60122B] text-white border border-white/20 flex items-center justify-center text-lg font-bold shadow-lg">
                 {fullName ? fullName.charAt(0).toUpperCase() : (user?.name ? user.name.charAt(0).toUpperCase() : 'U')}
@@ -152,7 +150,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
 
           {/* Success Banner */}
           {success && (
-            <div className="mt-4 p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-500/60 flex items-center space-x-2.5 text-emerald-200 text-xs shadow-lg animate-fade-in">
+            <div className="mt-3 p-3.5 rounded-2xl bg-emerald-950/80 border border-emerald-500/60 flex items-center space-x-2.5 text-emerald-200 text-xs shadow-lg animate-fade-in shrink-0">
               <CheckCircle2 size={18} className="shrink-0 text-emerald-400" />
               <span className="font-medium">{success}</span>
             </div>
@@ -160,14 +158,14 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
 
           {/* Error Banner */}
           {error && (
-            <div className="mt-4 p-3.5 rounded-2xl bg-[#930E36]/60 border border-red-500/60 flex items-center space-x-2.5 text-red-200 text-xs shadow-lg animate-fade-in">
+            <div className="mt-3 p-3.5 rounded-2xl bg-[#930E36]/60 border border-red-500/60 flex items-center space-x-2.5 text-red-200 text-xs shadow-lg animate-fade-in shrink-0">
               <ShieldAlert size={18} className="shrink-0 text-red-400" />
               <span className="font-medium">{error}</span>
             </div>
           )}
 
           {/* Edit Profile Form */}
-          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4 flex-1 overflow-y-auto pr-1">
             {/* Read-Only Campus Email */}
             <div>
               <div className="flex justify-between items-center mb-1.5">

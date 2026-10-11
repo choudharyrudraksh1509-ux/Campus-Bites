@@ -103,13 +103,13 @@ function App() {
 
         {/* Main Route Content - Require Auth Gate */}
         {!user ? (
-          <main className="w-full min-h-[100dvh] flex items-center justify-center p-4">
+          <main className="w-full min-h-[100dvh] flex items-center justify-center p-0 sm:p-4">
             <Login onSuccess={handleAuthSuccess} />
           </main>
         ) : (
           <main
             style={{
-              paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 3.75rem)'
+              paddingTop: 'calc(max(env(safe-area-inset-top, 0px), 54px) + 52px)'
             }}
             className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 md:!pt-24 pb-0"
           >

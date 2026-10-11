@@ -83,13 +83,31 @@ export default function Login({ onSuccess }: LoginProps) {
   };
 
   return (
-    <div className="w-full max-w-md my-auto fade-in">
-      <div className="w-full bg-[#4C1829] text-white rounded-3xl p-6 sm:p-8 shadow-[0_35px_80px_rgba(0,0,0,0.95)] border border-[#930E36] relative overflow-hidden space-y-6">
-        
+    <div className="w-full min-h-[100dvh] sm:min-h-0 sm:max-w-md sm:my-auto fade-in flex flex-col justify-center">
+      <div
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 36px)',
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)'
+        }}
+        className="w-full min-h-[100dvh] sm:min-h-0 bg-[#4C1829] text-white rounded-none sm:rounded-3xl p-5 sm:p-8 shadow-none sm:shadow-[0_35px_80px_rgba(0,0,0,0.95)] border-0 sm:border border-[#930E36] relative overflow-hidden flex flex-col justify-between"
+      >
         {/* Halftone Pattern Overlay */}
         <div className="absolute inset-0 bg-small-dots opacity-20 pointer-events-none mix-blend-overlay"></div>
 
-        <div className="relative z-10 space-y-6">
+        <div className="relative z-10 space-y-5 my-auto">
+          {/* Top Brand Header for Native App feel */}
+          <div className="text-center space-y-1 mb-2">
+            <div className="inline-flex items-center space-x-2 bg-[#930E36]/50 border border-[#930E36]/80 px-3 py-1 rounded-full mb-1">
+              <span className="text-sm font-bold tracking-tight text-white">Bites</span>
+              <span className="text-[10px] text-white/80 font-mono">VIT CAMPUS</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              {isRegister ? 'Create Your Account' : 'Welcome to Campus Bites'}
+            </h2>
+            <p className="text-xs text-white/70">
+              Instant Takeaway Counter Pre-Ordering
+            </p>
+          </div>
 
           {/* Student vs Staff Mode Switcher */}
           <div className="flex justify-center space-x-4 mb-4 border-b border-white/10 pb-4">

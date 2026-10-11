@@ -137,10 +137,10 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
       {/* ======================================================== */}
       <header
         style={{
-          paddingTop: 'max(env(safe-area-inset-top, 0px), 10px)',
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 54px)',
           paddingBottom: '10px'
         }}
-        className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-b border-white/10 px-4 flex items-center justify-between shadow-md"
+        className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#1D1D21] backdrop-blur-xl border-b border-white/10 px-4 flex items-center justify-between shadow-md"
       >
         <Link to="/" className="flex items-center space-x-2 group">
           <span className="text-lg font-bold tracking-tight text-white group-hover:text-[#FF004B] transition-colors">
@@ -188,8 +188,8 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
       {/* ======================================================== */}
       <nav
         style={{
-          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
-          paddingTop: '6px'
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 14px)',
+          paddingTop: '8px'
         }}
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-t border-white/10 px-2 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.5)]"
       >
