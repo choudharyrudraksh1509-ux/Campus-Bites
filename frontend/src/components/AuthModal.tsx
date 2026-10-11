@@ -47,7 +47,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
     try {
       if (isRegister) {
-        await api.post('/auth/register', {
+        const regRes = await api.post('/auth/register', {
           fullName: fullName.trim(),
           email: email.trim().toLowerCase(),
           password: password.trim(),
@@ -55,12 +55,19 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
           role: 'CUSTOMER'
         });
 
-        const loginRes = await api.post('/auth/login', {
-          email: email.trim().toLowerCase(),
-          password: password.trim()
-        });
+        let userData = regRes.data?.user;
+        let userToken = regRes.data?.token;
 
-        onSuccess(loginRes.data.user, loginRes.data.token);
+        if (!userToken || !userData) {
+          const loginRes = await api.post('/auth/login', {
+            email: email.trim().toLowerCase(),
+            password: password.trim()
+          });
+          userData = loginRes.data?.user;
+          userToken = loginRes.data?.token;
+        }
+
+        onSuccess(userData, userToken);
         onClose();
       } else {
         const res = await api.post('/auth/login', {

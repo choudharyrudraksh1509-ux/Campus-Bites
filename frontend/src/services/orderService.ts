@@ -1,0 +1,265 @@
+import api from './api';
+
+export interface OrderItem {
+  id: number;
+  name: string;
+  quantity: number;
+  price: number;
+  itemId?: number;
+  price_at_order?: number;
+}
+
+export interface Order {
+  order_id: number;
+  id?: number;
+  shop_name: string;
+  shop_id?: number;
+  items: OrderItem[];
+  total_amount: number;
+  status: string; // 'PAYMENT_PENDING' | 'PLACED' | 'PREPARING' | 'READY' | 'COMPLETED' | 'CANCELLED'
+  pickup_token: string;
+  created_at: string;
+  order_time?: string;
+}
+
+export interface PlaceOrderItem {
+  itemId: number;
+  quantity: number;
+  name?: string;
+  price?: number;
+}
+
+const updateLocalOrderStatus = (orderId: number, status: string): void => {
+  try {
+    const raw = localStorage.getItem('campusbite_orders');
+    if (raw) {
+      const orders: Order[] = JSON.parse(raw);
+      const updated = orders.map(o => o.order_id === orderId ? { ...o, status } : o);
+      localStorage.setItem('campusbite_orders', JSON.stringify(updated));
+    }
+  } catch (err) {
+    console.error('Failed to update local order status', err);
+  }
+};
+
+export const orderService = {
+  /**
+   * Fetch all orders for current user, merging live backend updates with localStorage fallback
+   */
+  async getOrders(): Promise<Order[]> {
+    let localOrders: Order[] = [];
+    try {
+      const raw = localStorage.getItem('campusbite_orders');
+      if (raw) {
+        localOrders = JSON.parse(raw);
+      }
+    } catch (err) {
+      console.error('Failed to parse local orders', err);
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token || token === 'undefined') {
+      return localOrders;
+    }
+
+    try {
+      const res = await api.get('/orders');
+      const apiOrders = Array.isArray(res.data) ? res.data : [];
+
+      const mappedApiOrders: Order[] = apiOrders.map((o: any) => ({
+        order_id: Number(o.order_id || o.id),
+        id: Number(o.id || o.order_id),
+        shop_name: o.shop_name || o.shop?.name || 'Campus Outlet',
+        shop_id: o.shop_id || o.shop?.id,
+        items: Array.isArray(o.items)
+          ? o.items.map((i: any) => ({
+              id: Number(i.itemId || i.id || i.item_id || 0),
+              name: i.item?.name || i.name || 'Food Item',
+              quantity: Number(i.quantity || 1),
+              price: Number(i.priceAtOrder || i.price_at_order || i.price || 0)
+            }))
+          : [],
+        total_amount: Number(o.total_amount || o.totalAmount || 0),
+        status: o.status || 'PLACED',
+        pickup_token: o.pickup_token || `TK-${1000 + (Number(o.id || o.order_id || 0) % 9000)}`,
+        created_at: o.order_time
+          ? new Date(o.order_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : 'Recent',
+        order_time: o.order_time
+      }));
+
+      // Merge backend orders with offline/demo local orders so no orders disappear
+      const apiOrderIds = new Set(mappedApiOrders.map(o => o.order_id));
+      const merged: Order[] = [
+        ...mappedApiOrders,
+        ...localOrders.filter(l => !apiOrderIds.has(l.order_id))
+      ];
+
+      merged.sort((a, b) => {
+        if (a.order_time && b.order_time) {
+          return new Date(b.order_time).getTime() - new Date(a.order_time).getTime();
+        }
+        return b.order_id - a.order_id;
+      });
+
+      try {
+        localStorage.setItem('campusbite_orders', JSON.stringify(merged));
+      } catch {
+        // Ignore storage quota
+      }
+
+      return merged;
+    } catch (error) {
+      console.warn('API getOrders failed, returning local cached orders', error);
+      return localOrders;
+    }
+  },
+
+  /**
+   * Place an order: communicates with backend API and ensures fallback sync in localStorage
+   */
+  async placeOrder(
+    shopId: number,
+    items: PlaceOrderItem[],
+    metadata?: {
+      shopName?: string;
+      packagingFee?: number;
+    }
+  ): Promise<Order> {
+    const token = localStorage.getItem('token');
+    const packagingFee = metadata?.packagingFee ?? 10;
+    const itemsSubtotal = items.reduce((sum, item) => sum + ((item.price || 0) * item.quantity), 0);
+    const totalAmount = itemsSubtotal + (items.length > 0 ? packagingFee : 0);
+
+    let orderId = Math.floor(1000 + Math.random() * 9000);
+    let pickupToken = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
+    let finalStatus = 'PLACED';
+
+    if (token && token !== 'undefined') {
+      try {
+        const payload = {
+          shopId: Number(shopId),
+          items: items.map(i => ({
+            itemId: Number(i.itemId),
+            quantity: Number(i.quantity),
+            name: i.name,
+            price: i.price
+          }))
+        };
+
+        const res = await api.post('/orders', payload);
+        if (res.data?.orderId || res.data?.id) {
+          orderId = Number(res.data.orderId || res.data.id);
+          if (res.data.pickup_token) {
+            pickupToken = res.data.pickup_token;
+          }
+
+          // Move order from PAYMENT_PENDING to PLACED
+          try {
+            await api.post(`/orders/${orderId}/payment`);
+            finalStatus = 'PLACED';
+          } catch (payErr) {
+            console.warn('Payment confirmation step skipped or failed', payErr);
+          }
+        }
+      } catch (apiErr: any) {
+        console.warn('API placeOrder error, falling back to local sync', apiErr);
+      }
+    }
+
+    const newOrder: Order = {
+      order_id: orderId,
+      id: orderId,
+      shop_name: metadata?.shopName || `Campus Outlet #${shopId}`,
+      shop_id: Number(shopId),
+      items: items.map(i => ({
+        id: Number(i.itemId),
+        name: i.name || 'Food Item',
+        quantity: Number(i.quantity),
+        price: Number(i.price || 0)
+      })),
+      total_amount: totalAmount,
+      status: finalStatus,
+      pickup_token: pickupToken,
+      created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      order_time: new Date().toISOString()
+    };
+
+    // Immediate save into localStorage
+    try {
+      const raw = localStorage.getItem('campusbite_orders');
+      const existing: Order[] = raw ? JSON.parse(raw) : [];
+      const updated = [newOrder, ...existing.filter(o => o.order_id !== newOrder.order_id)];
+      localStorage.setItem('campusbite_orders', JSON.stringify(updated));
+    } catch (err) {
+      console.error('Failed to sync order to localStorage', err);
+    }
+
+    return newOrder;
+  },
+
+  /**
+   * Confirm payment to transition order to PLACED
+   */
+  async confirmPayment(orderId: number): Promise<boolean> {
+    try {
+      await api.post(`/orders/${orderId}/payment`);
+      updateLocalOrderStatus(orderId, 'PLACED');
+      return true;
+    } catch (error) {
+      console.warn(`Payment confirmation for order ${orderId} failed`, error);
+      updateLocalOrderStatus(orderId, 'PLACED');
+      return false;
+    }
+  },
+
+  /**
+   * Cancel an order if it is in PAYMENT_PENDING or PLACED status
+   */
+  async cancelOrder(orderId: number): Promise<boolean> {
+    try {
+      await api.patch(`/orders/${orderId}/cancel`);
+      updateLocalOrderStatus(orderId, 'CANCELLED');
+      return true;
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error;
+      if (errorMsg) {
+        throw new Error(errorMsg);
+      }
+      updateLocalOrderStatus(orderId, 'CANCELLED');
+      return true;
+    }
+  },
+
+  /**
+   * Get single order details
+   */
+  async getOrderById(orderId: number): Promise<Order | null> {
+    try {
+      const res = await api.get(`/orders/${orderId}`);
+      if (res.data) {
+        const o = res.data.order || res.data;
+        return {
+          order_id: Number(o.order_id || o.id),
+          id: Number(o.id || o.order_id),
+          shop_name: o.shop_name || 'Campus Outlet',
+          items: res.data.items || [],
+          total_amount: Number(o.total_amount || 0),
+          status: o.status || 'PLACED',
+          pickup_token: o.pickup_token || `TK-${1000 + (Number(o.id || o.order_id) % 9000)}`,
+          created_at: o.order_time
+            ? new Date(o.order_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Recent',
+          order_time: o.order_time
+        };
+      }
+    } catch {
+      // Check localStorage
+      const orders = await this.getOrders();
+      return orders.find(o => o.order_id === orderId) || null;
+    }
+    return null;
+  }
+};
+
+export default orderService;

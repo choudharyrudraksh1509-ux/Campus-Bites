@@ -49,16 +49,31 @@ export default function Login({ onSuccess }: LoginProps) {
 
     try {
       const res = await api.post(endpoint, payload);
-      const { user, token } = res.data;
+      let userData = res.data?.user;
+      let userToken = res.data?.token;
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('campusbite_user', JSON.stringify(user));
-
-      if (onSuccess) {
-        onSuccess(user, token);
+      // If backend registration didn't return token and user directly, automatically login
+      if (isRegister && (!userToken || !userData)) {
+        const loginRes = await api.post('/auth/login', {
+          email: email.trim().toLowerCase(),
+          password
+        });
+        userData = loginRes.data?.user;
+        userToken = loginRes.data?.token;
       }
 
-      navigate('/');
+      if (userData && userToken) {
+        localStorage.setItem('token', userToken);
+        localStorage.setItem('campusbite_user', JSON.stringify(userData));
+
+        if (onSuccess) {
+          onSuccess(userData, userToken);
+        }
+
+        navigate('/');
+      } else {
+        setError('Authentication succeeded, but failed to retrieve session. Please log in.');
+      }
     } catch (err: any) {
       const msg = err.response?.data?.error || err.response?.data?.issues?.[0]?.message || 'Authentication failed. Please check your details.';
       setError(msg);

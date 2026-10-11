@@ -13,8 +13,15 @@ import api from './services/api';
 function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<any>(() => {
-    const saved = localStorage.getItem('campusbite_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('campusbite_user');
+      if (saved && saved !== 'undefined') {
+        return JSON.parse(saved);
+      }
+    } catch {
+      localStorage.removeItem('campusbite_user');
+    }
+    return null;
   });
 
   const [cartCount, setCartCount] = useState(0);
@@ -22,9 +29,13 @@ function App() {
   // Sync cart count from localStorage
   useEffect(() => {
     const updateCount = () => {
-      const savedCart = JSON.parse(localStorage.getItem('campusbite_cart') || '[]');
-      const count = savedCart.reduce((acc: number, c: any) => acc + c.quantity, 0);
-      setCartCount(count);
+      try {
+        const savedCart = JSON.parse(localStorage.getItem('campusbite_cart') || '[]');
+        const count = Array.isArray(savedCart) ? savedCart.reduce((acc: number, c: any) => acc + (c.quantity || 0), 0) : 0;
+        setCartCount(count);
+      } catch {
+        setCartCount(0);
+      }
     };
 
     updateCount();
@@ -35,7 +46,7 @@ function App() {
   // Fetch logged in user on mount
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token && !user) {
+    if (token && token !== 'undefined' && !user) {
       api.get('/auth/me')
         .then(res => {
           if (res.data?.user) {
@@ -48,6 +59,8 @@ function App() {
           localStorage.removeItem('token');
           localStorage.removeItem('campusbite_user');
         });
+    } else if (token === 'undefined') {
+      localStorage.removeItem('token');
     }
   }, [user]);
 
@@ -67,12 +80,14 @@ function App() {
     <Router>
       <div className="min-h-screen bg-transparent text-white font-sans antialiased selection:bg-red-500 selection:text-white">
         
-        {/* Floating Upper Navigation Bar - Only when logged in */}
+        {/* Upper Navigation Bar & Mobile App Bar / Bottom Nav - Only when logged in */}
         {user && (
           <Navbar
             user={user}
             onLogout={handleLogout}
             onOpenAuth={() => setIsAuthOpen(true)}
+            onUpdateUser={setUser}
+            cartCount={cartCount}
           />
         )}
 
@@ -87,7 +102,7 @@ function App() {
         />
 
         {/* Main Route Content - Require Auth Gate */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-12 md:pt-4 pb-20 md:pb-6">
           {!user ? (
             <Login onSuccess={handleAuthSuccess} />
           ) : (

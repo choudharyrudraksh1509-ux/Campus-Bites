@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Star, Clock } from 'lucide-react';
+import { Store, Star, Clock, MessageSquare } from 'lucide-react';
 import api from '../services/api';
+import ReviewsModal from '../components/ReviewsModal';
 
 interface Shop {
   shop_id: number;
@@ -34,6 +35,7 @@ const MOCK_CAMPUS_SHOPS: Shop[] = [
 export default function Home() {
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedComplex, setSelectedComplex] = useState<string>('ALL');
+  const [selectedReviewShop, setSelectedReviewShop] = useState<Shop | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -146,10 +148,18 @@ export default function Home() {
                     {shop.name}
                   </h3>
 
-                  <div className="flex items-center space-x-1 bg-[#930E36]/40 backdrop-blur-md text-white px-2.5 py-1 rounded-full text-xs border border-[#930E36]/60 shrink-0 shadow-sm">
-                    <Star size={12} className="fill-white text-white" />
-                    <span>{shop.rating}</span>
-                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedReviewShop(shop);
+                    }}
+                    className="flex items-center space-x-1.5 bg-[#930E36]/50 hover:bg-[#930E36] backdrop-blur-md text-white px-3 py-1 rounded-full text-xs border border-[#930E36]/80 shrink-0 shadow-sm hover:scale-105 transition-all group/rating"
+                    title="View outlet ratings and reviews"
+                  >
+                    <Star size={13} className="fill-amber-400 text-amber-400" />
+                    <span className="font-semibold">{shop.rating}</span>
+                    <span className="text-[10px] text-white/70 ml-0.5 underline">Reviews</span>
+                  </button>
                 </div>
 
                 {/* Item Tags inside Boxes */}
@@ -164,9 +174,9 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Card Footer: Full-Width Explore Menu Button */}
-              <div className="mt-6 relative z-10">
-                <div className="flex items-center justify-between text-xs text-white/90 mb-3">
+              {/* Card Footer: Reviews & Explore Menu Buttons */}
+              <div className="mt-6 relative z-10 space-y-3">
+                <div className="flex items-center justify-between text-xs text-white/90">
                   <span className="flex items-center space-x-1">
                     <Clock size={13} />
                     <span>Wait: {shop.waitTime}</span>
@@ -174,17 +184,52 @@ export default function Home() {
                   <span>Takeaway Only</span>
                 </div>
 
-                <button
-                  onClick={(e) => { e.stopPropagation(); navigate(`/shop/${shop.shop_id}/menu`); }}
-                  className="w-full bg-white hover:bg-white/95 text-[#4C1829] font-medium text-xs py-3.5 rounded-2xl shadow-xl transition-all text-center uppercase tracking-wider"
-                >
-                  Explore Menu
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedReviewShop(shop);
+                    }}
+                    className="w-full bg-[#930E36]/40 hover:bg-[#930E36]/70 border border-[#930E36] text-white font-medium text-xs py-3 rounded-2xl shadow-md transition-all flex items-center justify-center space-x-1.5 uppercase tracking-wider"
+                  >
+                    <MessageSquare size={13} className="text-amber-400" />
+                    <span>Reviews</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/shop/${shop.shop_id}/menu`);
+                    }}
+                    className="w-full bg-white hover:bg-white/95 text-[#4C1829] font-medium text-xs py-3 rounded-2xl shadow-xl transition-all text-center uppercase tracking-wider"
+                  >
+                    Explore Menu
+                  </button>
+                </div>
               </div>
 
             </div>
           ))}
         </div>
+      )}
+
+      {/* Reviews and Ratings Modal */}
+      {selectedReviewShop && (
+        <ReviewsModal
+          isOpen={!!selectedReviewShop}
+          onClose={() => setSelectedReviewShop(null)}
+          shopId={selectedReviewShop.shop_id}
+          shopName={selectedReviewShop.name}
+          areaName={selectedReviewShop.area_name}
+          initialRating={selectedReviewShop.rating}
+          onReviewAdded={(newAvg) => {
+            if (newAvg) {
+              setShops(prev =>
+                prev.map(s => s.shop_id === selectedReviewShop.shop_id ? { ...s, rating: newAvg } : s)
+              );
+            }
+          }}
+        />
       )}
 
     </div>

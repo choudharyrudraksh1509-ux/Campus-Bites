@@ -44,7 +44,9 @@ export const placeOrderSchema = z.object({
     shopId: z.number().int().positive(),
     items: z.array(z.object({
       itemId: z.number().int().positive(),
-      quantity: z.number().int().positive()
+      quantity: z.number().int().positive(),
+      name: z.string().optional(),
+      price: z.number().optional()
     })).min(1)
   })
 });

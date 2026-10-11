@@ -1,0 +1,21 @@
+{
+  "name": "Campus Bites — Smart Campus Takeaway",
+  "short_name": "Campus Bites",
+  "description": "Smart campus takeaway ordering app for VIT food outlets",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "window-controls-overlay"],
+  "background_color": "#161513",
+  "theme_color": "#4C1829",
+  "orientation": "portrait-primary",
+  "categories": ["food", "lifestyle", "shopping"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

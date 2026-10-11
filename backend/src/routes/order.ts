@@ -7,9 +7,11 @@ const router = Router();
 router.use(authenticateToken);
 
 router.post('/', validateRequest(placeOrderSchema), placeOrder);
+router.get('/', getMyOrders);
 router.get('/my-orders', getMyOrders);
 router.get('/:orderId', getOrderById);
 router.patch('/:orderId/cancel', cancelOrder);
+router.put('/:orderId/cancel', cancelOrder);
 router.post('/:orderId/payment', confirmPayment);
 
 export default router;

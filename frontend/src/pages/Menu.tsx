@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2 } from 'lucide-react';
+import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2, Trash2 } from 'lucide-react';
 import api from '../services/api';
+import orderService from '../services/orderService';
 import SingleOutletModal from '../components/SingleOutletModal';
 
 interface MenuItem {
@@ -208,7 +209,30 @@ export default function Menu() {
 
   useEffect(() => {
     localStorage.setItem('campusbite_cart', JSON.stringify(cart));
+    window.dispatchEvent(new Event('cartUpdated'));
   }, [cart]);
+
+  // Sync cart if updated externally (e.g. via FloatingCart or CartModal)
+  useEffect(() => {
+    const handleCartSync = () => {
+      try {
+        const raw = localStorage.getItem('campusbite_cart') || '[]';
+        const saved = JSON.parse(raw);
+        setCart(prev => {
+          if (JSON.stringify(prev) === raw) return prev;
+          return Array.isArray(saved) ? saved : [];
+        });
+      } catch {
+        setCart([]);
+      }
+    };
+    window.addEventListener('cartUpdated', handleCartSync);
+    window.addEventListener('storage', handleCartSync);
+    return () => {
+      window.removeEventListener('cartUpdated', handleCartSync);
+      window.removeEventListener('storage', handleCartSync);
+    };
+  }, []);
 
   useEffect(() => {
     api.get(`/shops/${sId}/menu`)
@@ -274,6 +298,33 @@ export default function Menu() {
   };
 
   const getItemQty = (itemId: number) => cart.find(c => c.id === itemId)?.quantity || 0;
+
+  const handleUpdateCartItemQty = (itemId: number, delta: number) => {
+    setCart(prev => {
+      const updated = prev
+        .map(item => {
+          if (item.id === itemId) {
+            const newQty = item.quantity + delta;
+            return newQty > 0 ? { ...item, quantity: newQty } : null;
+          }
+          return item;
+        })
+        .filter((item): item is typeof prev[0] => item !== null);
+      return updated;
+    });
+  };
+
+  const handleDeleteCartItem = (itemId: number) => {
+    setCart(prev => prev.filter(c => c.id !== itemId));
+  };
+
+  const handleClearCart = () => {
+    if (window.confirm('Are you sure you want to clear your takeaway cart?')) {
+      setCart([]);
+      localStorage.removeItem('campusbite_cart');
+      window.dispatchEvent(new Event('cartUpdated'));
+    }
+  };
   const totalCartCount = cart.reduce((acc, c) => acc + c.quantity, 0);
   const cartSubtotal = cart.reduce((acc, c) => acc + (c.quantity * c.price), 0);
   const packagingFee = cart.length > 0 ? 10 : 0;
@@ -282,48 +333,28 @@ export default function Menu() {
   const handleCheckout = async () => {
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-      const payload = {
-        shopId: sId,
-        items: cart.map(c => ({ itemId: c.id, quantity: c.quantity }))
-      };
+      const orderItems = cart.map(c => ({
+        itemId: c.id,
+        quantity: c.quantity,
+        name: c.name,
+        price: c.price
+      }));
 
-      let orderId = Math.floor(1000 + Math.random() * 9000);
-      if (token) {
-        try {
-          const res = await api.post('/orders', payload);
-          if (res.data?.orderId) {
-            orderId = res.data.orderId;
-            // Automatically confirm payment since we are mocking it
-            await api.post(`/orders/${orderId}/payment`);
-          }
-        } catch (e: any) {
-          console.warn('API post order failed', e.response?.data?.error || e.message);
-          alert(`Failed to place order: ${e.response?.data?.error || e.message}`);
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
-      // We no longer strictly need localStorage, but keeping it for guest fallback
-      const savedOrders = JSON.parse(localStorage.getItem('campusbite_orders') || '[]');
-      const newOrder = {
-        order_id: orderId,
-        shop_name: cart[0]?.shopName || shopName,
-        items: cart,
-        total_amount: grandTotal,
-        status: 'PLACED',
-        pickup_token: `TK-${Math.floor(1000 + Math.random() * 9000)}`,
-        created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      localStorage.setItem('campusbite_orders', JSON.stringify([newOrder, ...savedOrders]));
+      const newOrder = await orderService.placeOrder(sId, orderItems, {
+        shopName: cart[0]?.shopName || shopName,
+        packagingFee
+      });
 
       setCart([]);
       localStorage.removeItem('campusbite_cart');
+      window.dispatchEvent(new Event('cartUpdated'));
       setIsCheckoutOpen(false);
 
       alert(`Takeaway Order Placed Successfully!\nOrder Token: ${newOrder.pickup_token}\nPickup in 10-15 mins at Stall Counter.`);
       navigate('/orders');
+    } catch (e: any) {
+      console.warn('Checkout error', e);
+      alert(`Failed to place order: ${e.message || 'Please try again.'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -490,9 +521,21 @@ export default function Menu() {
                 <ShoppingBag size={20} className="text-white" />
                 <h3 className="text-base text-white tracking-tight">Takeaway Cart</h3>
               </div>
-              <span className="text-xs bg-[#930E36]/50 text-white px-2.5 py-1 rounded-xl border border-[#930E36]/70">
-                {totalCartCount} Items
-              </span>
+              <div className="flex items-center space-x-2">
+                {cart.length > 0 && (
+                  <button
+                    onClick={handleClearCart}
+                    className="text-[11px] bg-red-900/40 hover:bg-red-700/60 text-red-200 border border-red-500/30 px-2 py-0.5 rounded-lg flex items-center space-x-1 transition-colors"
+                    title="Clear entire cart"
+                  >
+                    <Trash2 size={12} />
+                    <span>Clear</span>
+                  </button>
+                )}
+                <span className="text-xs bg-[#930E36]/50 text-white px-2.5 py-1 rounded-xl border border-[#930E36]/70">
+                  {totalCartCount} Items
+                </span>
+              </div>
             </div>
 
             <div className="relative z-10">
@@ -512,14 +555,51 @@ export default function Menu() {
                   </div>
 
                   {/* Items List */}
-                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                     {cart.map(c => (
-                      <div key={c.id} className="flex justify-between items-center text-xs text-white">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-white bg-[#930E36]/40 px-2 py-0.5 rounded-md">{c.quantity}x</span>
-                          <span className="text-white">{c.name}</span>
+                      <div
+                        key={c.id}
+                        className="flex items-center justify-between p-2 rounded-2xl bg-[#930E36]/25 border border-[#930E36]/40 text-xs text-white transition-all hover:border-[#930E36]/70"
+                      >
+                        <div className="space-y-0.5 max-w-[45%]">
+                          <div className="font-medium text-white truncate">{c.name}</div>
+                          <div className="text-[11px] text-white/70">
+                            ₹{c.price} ea • <span className="text-white font-medium">₹{c.price * c.quantity}</span>
+                          </div>
                         </div>
-                        <span className="text-white">₹{c.price * c.quantity}</span>
+
+                        <div className="flex items-center space-x-2 shrink-0">
+                          {/* Quantity Controls */}
+                          <div className="flex items-center space-x-1 bg-[#4C1829] px-1 py-0.5 rounded-xl border border-[#930E36]/60">
+                            <button
+                              onClick={() => handleUpdateCartItemQty(c.id, -1)}
+                              className="w-5 h-5 bg-white text-[#4C1829] rounded flex items-center justify-center hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+                              title="Decrease quantity"
+                            >
+                              <Minus size={11} />
+                            </button>
+                            <span className="w-5 text-center text-[11px] font-semibold text-white">
+                              {c.quantity}
+                            </span>
+                            <button
+                              onClick={() => handleUpdateCartItemQty(c.id, 1)}
+                              className="w-5 h-5 bg-white text-[#4C1829] rounded flex items-center justify-center hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+                              title="Increase quantity"
+                            >
+                              <Plus size={11} />
+                            </button>
+                          </div>
+
+                          {/* Delete Item Button */}
+                          <button
+                            onClick={() => handleDeleteCartItem(c.id)}
+                            className="p-1.5 rounded-lg bg-red-900/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 hover:border-red-600 transition-all active:scale-90"
+                            title="Remove item"
+                            aria-label={`Remove ${c.name}`}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -559,14 +639,14 @@ export default function Menu() {
       {/* Checkout Modal */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#4C1829] text-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.9)] border border-[#930E36] space-y-5 relative overflow-hidden">
+          <div className="bg-[#4C1829] text-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.9)] border border-[#930E36] relative overflow-hidden flex flex-col max-h-[90vh]">
             <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-20 pointer-events-none mix-blend-overlay"></div>
             
-            <div className="relative z-10 space-y-5">
-              <div className="flex justify-between items-center border-b border-[#930E36]/60 pb-3">
+            <div className="relative z-10 flex flex-col space-y-4 overflow-hidden h-full">
+              <div className="flex justify-between items-center border-b border-[#930E36]/60 pb-3 shrink-0">
                 <div>
                   <h3 className="text-xl text-white tracking-tight">Confirm Takeaway Order</h3>
-                  <p className="text-xs text-white/80">Stall Pickup • {cart[0]?.shopName}</p>
+                  <p className="text-xs text-white/80">Stall Pickup • {cart[0]?.shopName || shopName}</p>
                 </div>
                 <button
                   onClick={() => setIsCheckoutOpen(false)}
@@ -576,61 +656,120 @@ export default function Menu() {
                 </button>
               </div>
 
-              {/* Takeaway Info Box */}
-              <div className="bg-[#930E36]/30 border border-[#930E36]/50 p-3.5 rounded-2xl flex items-center space-x-3 text-white">
-                <Clock size={20} className="text-white shrink-0" />
-                <div>
-                  <p className="text-xs text-white">Estimated Pickup Time: 10 - 15 Mins</p>
-                  <p className="text-[11px] text-white/80">Present your Secret Pickup Token Code at stall counter.</p>
-                </div>
-              </div>
-
-              {/* Payment Method Selector */}
-              <div className="space-y-2">
-                <label className="block text-xs text-white uppercase tracking-wider">Select Payment Method</label>
-                
-                <div
-                  onClick={() => setPaymentMethod('UPI')}
-                  className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
-                    paymentMethod === 'UPI' ? 'border-[#930E36] bg-[#930E36]/40 text-white' : 'border-white/20 hover:bg-white/10 text-white/80'
-                  }`}
-                >
-                  <span>UPI Payment (Google Pay / PhonePe / Paytm)</span>
-                  {paymentMethod === 'UPI' && <CheckCircle2 size={16} className="text-white" />}
+              <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+                {/* Takeaway Info Box */}
+                <div className="bg-[#930E36]/30 border border-[#930E36]/50 p-3 rounded-2xl flex items-center space-x-3 text-white shrink-0">
+                  <Clock size={20} className="text-white shrink-0" />
+                  <div>
+                    <p className="text-xs text-white font-medium">Estimated Pickup Time: 10 - 15 Mins</p>
+                    <p className="text-[11px] text-white/80">Present your Secret Pickup Token Code at stall counter.</p>
+                  </div>
                 </div>
 
-                <div
-                  onClick={() => setPaymentMethod('CARD')}
-                  className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
-                    paymentMethod === 'CARD' ? 'border-[#930E36] bg-[#930E36]/40 text-white' : 'border-white/20 hover:bg-white/10 text-white/80'
-                  }`}
-                >
-                  <span>Credit / Debit Card</span>
-                  {paymentMethod === 'CARD' && <CheckCircle2 size={16} className="text-white" />}
+                {/* Items in Checkout Modal with Add/Remove/Delete */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-white/80">
+                    <span className="uppercase tracking-wider text-[11px] font-medium">Order Items ({cart.length})</span>
+                    <span className="text-[11px] text-white/60">Adjust or remove items</span>
+                  </div>
+
+                  {cart.length === 0 ? (
+                    <div className="py-4 text-center bg-[#930E36]/20 border border-[#930E36]/40 rounded-2xl text-xs text-white/70">
+                      Your cart is empty. Add items from the menu to proceed.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                      {cart.map(c => (
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-[#930E36]/30 border border-[#930E36]/50 text-xs text-white"
+                        >
+                          <div className="truncate max-w-[48%]">
+                            <p className="font-medium text-white truncate">{c.name}</p>
+                            <p className="text-[11px] text-white/70">
+                              ₹{c.price} ea • <span className="text-white font-medium">₹{c.price * c.quantity}</span>
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-1.5 shrink-0">
+                            <button
+                              onClick={() => handleUpdateCartItemQty(c.id, -1)}
+                              className="w-5 h-5 bg-white text-[#4C1829] rounded flex items-center justify-center hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+                              title="Decrease quantity"
+                            >
+                              <Minus size={11} />
+                            </button>
+                            <span className="w-5 text-center text-xs font-semibold text-white">{c.quantity}</span>
+                            <button
+                              onClick={() => handleUpdateCartItemQty(c.id, 1)}
+                              className="w-5 h-5 bg-white text-[#4C1829] rounded flex items-center justify-center hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+                              title="Increase quantity"
+                            >
+                              <Plus size={11} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCartItem(c.id)}
+                              className="p-1 rounded-lg bg-red-900/30 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 hover:border-red-600 transition-all ml-1"
+                              title="Remove item"
+                              aria-label={`Remove ${c.name}`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div
-                  onClick={() => setPaymentMethod('CASH')}
-                  className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
-                    paymentMethod === 'CASH' ? 'border-[#930E36] bg-[#930E36]/40 text-white' : 'border-white/20 hover:bg-white/10 text-white/80'
-                  }`}
-                >
-                  <span>Counter Cash on Pickup</span>
-                  {paymentMethod === 'CASH' && <CheckCircle2 size={16} className="text-white" />}
+                {/* Payment Method Selector */}
+                <div className="space-y-2">
+                  <label className="block text-xs text-white uppercase tracking-wider font-medium">
+                    Select Payment Method
+                  </label>
+                  
+                  <div
+                    onClick={() => setPaymentMethod('UPI')}
+                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
+                      paymentMethod === 'UPI' ? 'border-[#930E36] bg-[#930E36]/40 text-white font-medium' : 'border-white/20 hover:bg-white/10 text-white/80'
+                    }`}
+                  >
+                    <span>UPI Payment (Google Pay / PhonePe / Paytm)</span>
+                    {paymentMethod === 'UPI' && <CheckCircle2 size={16} className="text-white" />}
+                  </div>
+
+                  <div
+                    onClick={() => setPaymentMethod('CARD')}
+                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
+                      paymentMethod === 'CARD' ? 'border-[#930E36] bg-[#930E36]/40 text-white font-medium' : 'border-white/20 hover:bg-white/10 text-white/80'
+                    }`}
+                  >
+                    <span>Credit / Debit Card</span>
+                    {paymentMethod === 'CARD' && <CheckCircle2 size={16} className="text-white" />}
+                  </div>
+
+                  <div
+                    onClick={() => setPaymentMethod('CASH')}
+                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition-all ${
+                      paymentMethod === 'CASH' ? 'border-[#930E36] bg-[#930E36]/40 text-white font-medium' : 'border-white/20 hover:bg-white/10 text-white/80'
+                    }`}
+                  >
+                    <span>Counter Cash on Pickup</span>
+                    {paymentMethod === 'CASH' && <CheckCircle2 size={16} className="text-white" />}
+                  </div>
                 </div>
               </div>
 
               {/* Order Total & Action */}
-              <div className="pt-3 border-t border-[#930E36]/60 flex items-center justify-between">
+              <div className="pt-3 border-t border-[#930E36]/60 flex items-center justify-between shrink-0">
                 <div>
                   <span className="block text-[10px] text-white/80 uppercase tracking-wider">Total Payable</span>
-                  <span className="text-xl text-white">₹{grandTotal}</span>
+                  <span className="text-xl text-white font-bold">₹{grandTotal}</span>
                 </div>
 
                 <button
                   onClick={handleCheckout}
-                  disabled={isSubmitting}
-                  className="py-3.5 px-6 bg-white hover:bg-white/95 text-[#4C1829] font-medium text-xs rounded-2xl shadow-xl transition-all uppercase tracking-wider"
+                  disabled={isSubmitting || cart.length === 0}
+                  className="py-3 px-6 bg-white hover:bg-white/95 disabled:opacity-50 text-[#4C1829] font-medium text-xs rounded-2xl shadow-xl transition-all uppercase tracking-wider"
                 >
                   {isSubmitting ? 'Processing Order...' : 'Place Order Now'}
                 </button>
