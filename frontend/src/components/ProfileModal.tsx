@@ -119,8 +119,6 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
         }}
         className="bg-[#4C1829] text-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl p-5 sm:p-8 shadow-none sm:shadow-[0_30px_70px_rgba(0,0,0,0.9)] border-0 sm:border border-[#930E36] relative overflow-hidden flex flex-col"
       >
-        <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-15 pointer-events-none mix-blend-overlay"></div>
-
         <div className="relative z-10 flex flex-col h-full overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-[#930E36]/50 shrink-0">

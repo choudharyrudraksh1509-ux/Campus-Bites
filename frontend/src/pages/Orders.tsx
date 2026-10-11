@@ -110,8 +110,6 @@ export default function Orders() {
       
       {/* Top Header Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#4C1829] text-white rounded-3xl p-6 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_10px_30px_rgba(76,24,41,0.6)] border border-[#930E36] relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-20 pointer-events-none mix-blend-overlay"></div>
-
         <div className="relative z-10">
           <button
             onClick={() => navigate('/')}
@@ -223,16 +221,6 @@ export default function Orders() {
                 key={order.order_id}
                 className="bg-[#4C1829] text-white border border-[#930E36] rounded-3xl p-5 sm:p-7 shadow-[0_30px_70px_rgba(0,0,0,0.85),0_10px_30px_rgba(76,24,41,0.6)] space-y-5 relative overflow-hidden transition-all"
               >
-                {/* Yellow Dots Pattern Overlay - Confined strictly to upper header region */}
-                <div
-                  className="absolute top-0 left-0 right-0 h-[160px] pointer-events-none bg-no-repeat bg-top bg-cover opacity-90 z-0"
-                  style={{
-                    backgroundImage: "url('/yellow-dots.png')",
-                    maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 30%, rgba(0,0,0,0) 100%)'
-                  }}
-                ></div>
-
                 <div className="relative z-10 space-y-5">
                   {/* Card Top Info */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#930E36]/60 pb-4 gap-3">

@@ -182,8 +182,6 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
         }}
         className="bg-[#4C1829] text-white w-full h-full sm:h-auto sm:max-h-[88vh] sm:max-w-lg sm:rounded-3xl p-4 sm:p-7 shadow-none sm:shadow-[0_30px_70px_rgba(0,0,0,0.95)] border-0 sm:border border-[#930E36] relative overflow-hidden flex flex-col"
       >
-        <div className="absolute inset-0 bg-[url('/bg-pattern.png')] bg-cover bg-center opacity-20 pointer-events-none mix-blend-overlay"></div>
-
         <div className="relative z-10 flex flex-col h-full overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[#930E36]/60 pb-3 mb-3 shrink-0">

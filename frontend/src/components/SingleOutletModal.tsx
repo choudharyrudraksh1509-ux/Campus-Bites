@@ -18,18 +18,8 @@ export default function SingleOutletModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-2xl animate-fade-in">
       <div className="bg-[#4C1829] text-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-[0_30px_70px_rgba(0,0,0,0.95)] border border-[#930E36] text-center relative overflow-hidden">
-        {/* Yellow Dots Pattern Overlay - Confined strictly to upper header region */}
-        <div
-          className="absolute top-0 left-0 right-0 h-[180px] pointer-events-none bg-no-repeat bg-top bg-cover opacity-90 z-0"
-          style={{
-            backgroundImage: "url('/yellow-dots.png')",
-            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)'
-          }}
-        ></div>
-        
         <div className="relative z-10">
           {/* Warning Icon Badge */}
           <div className="w-14 h-14 bg-[#930E36]/50 text-white rounded-3xl flex items-center justify-center mx-auto mb-4 border border-[#930E36] shadow-md">
