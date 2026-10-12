@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import AuthModal from './components/AuthModal';
 import FloatingCart from './components/FloatingCart';
@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import api from './services/api';
 
 function App() {
+
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<any>(() => {
     try {
@@ -91,8 +92,8 @@ function App() {
           />
         )}
 
-        {/* Floating Bottom Cart Button - Only when logged in */}
-        {user && <FloatingCart cartCount={cartCount} />}
+        {/* Floating Bottom Cart Button - Only for students/customers */}
+        {user && user.role !== 'STAFF' && <FloatingCart cartCount={cartCount} />}
 
         {/* Auth Modal */}
         <AuthModal
@@ -114,11 +115,21 @@ function App() {
             className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 md:!pt-24 pb-0"
           >
             <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/shop/:shopId/menu" element={<Menu />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/staff" element={<StaffDashboard />} />
-              <Route path="/login" element={<Home />} />
+              {user.role === 'STAFF' ? (
+                <>
+                  <Route path="/staff" element={<StaffDashboard />} />
+                  <Route path="*" element={<Navigate to="/staff" replace />} />
+                </>
+              ) : (
+                <>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/shop/:shopId/menu" element={<Menu />} />
+                  <Route path="/orders" element={<Orders />} />
+                  <Route path="/staff" element={<StaffDashboard />} />
+                  <Route path="/login" element={<Home />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </>
+              )}
             </Routes>
           </main>
         )}

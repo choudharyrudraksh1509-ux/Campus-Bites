@@ -56,39 +56,44 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
         className="hidden md:grid fixed left-1/2 -translate-x-1/2 z-40 max-w-2xl w-[92%] backdrop-blur-xl bg-[#1D1D21]/90 border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.6)] grid-cols-3 items-center px-6 py-3.5 transition-all"
       >
         
-        {/* Column 1 (Left): Navigation Links */}
+        {/* Column 1 (Left): Navigation Links - Removed Outlets & Activity for Staff */}
         <div className="flex items-center space-x-1 sm:space-x-2">
-          <Link
-            to="/"
-            className={`text-xs px-3.5 py-1.5 rounded-full transition-all ${
-              location.pathname === '/' ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            Outlets
-          </Link>
-          <Link
-            to="/orders"
-            className={`text-xs px-3.5 py-1.5 rounded-full transition-all ${
-              location.pathname === '/orders' ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            Activity
-          </Link>
+          {user?.role !== 'STAFF' && (
+            <>
+              <Link
+                to="/"
+                className={`text-xs px-3.5 py-1.5 rounded-full transition-all ${
+                  location.pathname === '/' ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white'
+                }`}
+              >
+                Outlets
+              </Link>
+              <Link
+                to="/orders"
+                className={`text-xs px-3.5 py-1.5 rounded-full transition-all ${
+                  location.pathname === '/orders' ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white'
+                }`}
+              >
+                Activity
+              </Link>
+            </>
+          )}
           {user && (user.role === 'STAFF' || user.role === 'OWNER') && (
             <Link
               to="/staff"
-              className={`text-xs px-3.5 py-1.5 rounded-full transition-all ${
-                location.pathname === '/staff' ? 'bg-white/15 text-[#FF004B]' : 'text-[#FF004B]/70 hover:text-[#FF004B]'
+              className={`text-xs px-3.5 py-1.5 rounded-full transition-all flex items-center space-x-1.5 ${
+                location.pathname === '/staff' ? 'bg-[#930E36]/30 text-[#FF004B] border border-[#930E36]/50' : 'text-[#FF004B]/80 hover:text-[#FF004B]'
               }`}
             >
-              Portal
+              <Store size={13} />
+              <span>{user?.shopName || 'Staff Portal'}</span>
             </Link>
           )}
         </div>
 
         {/* Column 2 (Center): Brand Name 'Bites' strictly centered */}
         <div className="text-center">
-          <Link to="/" className="inline-block group">
+          <Link to={user?.role === 'STAFF' ? '/staff' : '/'} className="inline-block group">
             <span className="text-xl tracking-tight text-white group-hover:text-[#FF004B] transition-colors">
               Bites
             </span>
@@ -142,12 +147,12 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
         }}
         className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#1D1D21] backdrop-blur-xl border-b border-white/10 px-4 flex items-center justify-between shadow-md"
       >
-        <Link to="/" className="flex items-center space-x-2 group">
+        <Link to={user?.role === 'STAFF' ? '/staff' : '/'} className="flex items-center space-x-2 group">
           <span className="text-lg font-bold tracking-tight text-white group-hover:text-[#FF004B] transition-colors">
             Bites
           </span>
           <span className="text-[10px] bg-[#930E36]/50 border border-[#930E36]/70 text-white/90 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">
-            VIT Campus
+            {user?.role === 'STAFF' ? (user?.shopName || 'Staff Portal') : 'VIT Campus'}
           </span>
         </Link>
 
@@ -193,47 +198,49 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
         }}
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-t border-[#930E36]/30 px-2 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.5)]"
       >
-        <Link
-          to="/"
-          className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
-            location.pathname === '/' ? 'text-white font-medium' : 'text-white/50 hover:text-white/80'
-          }`}
-        >
-          <Store size={20} className={location.pathname === '/' ? 'text-white' : 'text-white/50'} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Outlets</span>
-        </Link>
+        {user?.role !== 'STAFF' ? (
+          <>
+            <Link
+              to="/"
+              className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
+                location.pathname === '/' ? 'text-white font-medium' : 'text-white/50 hover:text-white/80'
+              }`}
+            >
+              <Store size={20} className={location.pathname === '/' ? 'text-white' : 'text-white/50'} />
+              <span className="text-[10px] mt-0.5 tracking-tight">Outlets</span>
+            </Link>
 
-        <Link
-          to="/orders"
-          className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
-            location.pathname === '/orders' ? 'text-white font-medium' : 'text-white/50 hover:text-white/80'
-          }`}
-        >
-          <Clock size={20} className={location.pathname === '/orders' ? 'text-white' : 'text-white/50'} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Activity</span>
-        </Link>
+            <Link
+              to="/orders"
+              className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
+                location.pathname === '/orders' ? 'text-white font-medium' : 'text-white/50 hover:text-white/80'
+              }`}
+            >
+              <Clock size={20} className={location.pathname === '/orders' ? 'text-white' : 'text-white/50'} />
+              <span className="text-[10px] mt-0.5 tracking-tight">Activity</span>
+            </Link>
 
-        <button
-          onClick={() => setIsCartOpen(true)}
-          className="flex flex-col items-center py-1 px-3 rounded-2xl text-white/50 hover:text-white/80 transition-all relative"
-          aria-label="View Cart"
-        >
-          <div className="relative">
-            <ShoppingBag size={20} className="text-white/70" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-white text-[#4C1829] text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold shadow-md">
-                {cartCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] mt-0.5 tracking-tight">Cart</span>
-        </button>
-
-        {user && (user.role === 'STAFF' || user.role === 'OWNER') && (
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="flex flex-col items-center py-1 px-3 rounded-2xl text-white/50 hover:text-white/80 transition-all relative"
+              aria-label="View Cart"
+            >
+              <div className="relative">
+                <ShoppingBag size={20} className="text-white/70" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-white text-[#4C1829] text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold shadow-md">
+                    {cartCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] mt-0.5 tracking-tight">Cart</span>
+            </button>
+          </>
+        ) : (
           <Link
             to="/staff"
-            className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
-              location.pathname === '/staff' ? 'text-[#FF004B] font-medium' : 'text-[#FF004B]/60 hover:text-[#FF004B]'
+            className={`flex flex-col items-center py-1 px-4 rounded-2xl transition-all ${
+              location.pathname === '/staff' ? 'text-[#FF004B] font-semibold' : 'text-white/60 hover:text-white'
             }`}
           >
             <Shield size={20} />

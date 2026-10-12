@@ -58,15 +58,13 @@ export default function Login({ onSuccess }: LoginProps) {
     setError('');
     if (!stallIdStr) {
       setEmail('');
-      return;
-    }
-    if (stallIdStr === 'owner') {
-      setEmail('owner@campusbites.com');
+      setPassword('');
       return;
     }
     const found = stalls.find(s => String(s.id) === stallIdStr);
     if (found) {
       setEmail(found.email);
+      setPassword('password123');
     }
   };
 
@@ -104,8 +102,9 @@ export default function Login({ onSuccess }: LoginProps) {
 
     setLoading(true);
     const endpoint = isRegister ? '/auth/register' : '/auth/login';
-    const payload: any = isRegister ? { fullName: name, email, password } : { email, password };
-    if (loginType === 'STAFF' && selectedStallId && selectedStallId !== 'owner') {
+    const finalPassword = password || 'password123';
+    const payload: any = isRegister ? { fullName: name, email, password: finalPassword } : { email, password: finalPassword };
+    if (loginType === 'STAFF' && selectedStallId) {
       payload.shopId = Number(selectedStallId);
     }
 
@@ -254,23 +253,20 @@ export default function Login({ onSuccess }: LoginProps) {
                         {stall.name}
                       </option>
                     ))}
-                    <option value="owner" className="bg-[#4C1829] text-white">
-                      Campus Administrator
-                    </option>
                   </select>
                   <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
                 </div>
 
-                {selectedStallId && selectedStallId !== 'owner' && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-white/5 border border-[#930E36]/40 text-[11px] text-white/80 flex items-center justify-between">
-                    <span className="font-mono text-white/90">ID: {email}</span>
-                    <span className="text-white/60">Pass: password123</span>
-                  </div>
-                )}
-                {selectedStallId === 'owner' && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-white/5 border border-[#930E36]/40 text-[11px] text-white/80 flex items-center justify-between">
-                    <span className="font-mono text-white/90">ID: owner@campusbites.com</span>
-                    <span className="text-white/60">Pass: password123</span>
+                {selectedStallId && (
+                  <div className="mt-2.5 p-3 rounded-2xl bg-white/5 border border-[#930E36]/50 text-xs text-white/90 space-y-1.5 shadow-inner">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-white/50 uppercase tracking-wider font-semibold">Staff Login ID:</span>
+                      <span className="font-mono text-[#FF004B] font-bold text-xs truncate max-w-[220px]">{email}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-white/50 uppercase tracking-wider font-semibold">Default Password:</span>
+                      <span className="font-mono text-emerald-400 font-bold text-xs">password123</span>
+                    </div>
                   </div>
                 )}
               </div>

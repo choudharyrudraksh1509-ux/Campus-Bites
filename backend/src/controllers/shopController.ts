@@ -1,12 +1,22 @@
 import { Request, Response } from 'express';
 import prisma from '../db/prisma';
+import { ensureStallStaffSeeded } from '../services/seedService';
 
 export const getShops = async (req: Request, res: Response): Promise<void> => {
     try {
-        const shops = await prisma.shop.findMany({
+        let shops = await prisma.shop.findMany({
             where: { status: 'ACTIVE' },
             include: { area: true }
         });
+
+        if (shops.length === 0) {
+            await ensureStallStaffSeeded();
+            shops = await prisma.shop.findMany({
+                where: { status: 'ACTIVE' },
+                include: { area: true }
+            });
+        }
+
         const mapped = shops.map(s => ({
             shop_id: s.id,
             name: s.name,
