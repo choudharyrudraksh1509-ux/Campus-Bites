@@ -104,26 +104,16 @@ export default function StaffDashboard() {
   const [menuSearch, setMenuSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
-  // Two-Step Verification Modal State
+  // One-Step Verification Modal State
   const [verifyModal, setVerifyModal] = useState<{
     isOpen: boolean;
     order: Order | null;
     targetStatus: string;
-    step: 1 | 2;
-    itemChecks: Record<number, boolean>;
-    prepCheck: boolean;
-    handoverCheck: boolean;
-    confirmCheck: boolean;
     isSubmitting: boolean;
   }>({
     isOpen: false,
     order: null,
     targetStatus: '',
-    step: 1,
-    itemChecks: {},
-    prepCheck: false,
-    handoverCheck: false,
-    confirmCheck: false,
     isSubmitting: false
   });
 
@@ -290,33 +280,15 @@ export default function StaffDashboard() {
   };
 
   // ==========================================
-  // TWO-STEP VERIFICATION HANDLERS
+  // ONE-STEP STATUS VERIFICATION HANDLERS
   // ==========================================
   const initiateStatusTransition = (order: Order, targetStatus: string) => {
-    const initialItemChecks: Record<number, boolean> = {};
-    order.items?.forEach(oi => {
-      initialItemChecks[oi.id] = false;
-    });
-
     setVerifyModal({
       isOpen: true,
       order,
       targetStatus,
-      step: 1,
-      itemChecks: initialItemChecks,
-      prepCheck: false,
-      handoverCheck: false,
-      confirmCheck: false,
       isSubmitting: false
     });
-  };
-
-  const handleStep1Proceed = () => {
-    setVerifyModal(prev => ({ ...prev, step: 2 }));
-  };
-
-  const handleStep2Back = () => {
-    setVerifyModal(prev => ({ ...prev, step: 1 }));
   };
 
   const executeStatusUpdate = async () => {
@@ -329,7 +301,7 @@ export default function StaffDashboard() {
       });
       
       showToast(`Order #${verifyModal.order.id} status updated to ${verifyModal.targetStatus}!`, 'success');
-      setVerifyModal(prev => ({ ...prev, isOpen: false, isSubmitting: false }));
+      setVerifyModal({ isOpen: false, order: null, targetStatus: '', isSubmitting: false });
       fetchOrders(true);
     } catch (err: any) {
       console.error('Failed to update status:', err);
@@ -824,7 +796,7 @@ export default function StaffDashboard() {
                             onClick={() => initiateStatusTransition(order, 'PLACED')} 
                             className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[11px] uppercase tracking-wider font-bold py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1.5"
                           >
-                            <span>Accept Order (2-Step)</span>
+                            <span>Accept Order</span>
                             <ArrowRight size={13} />
                           </button>
                         )}
@@ -834,7 +806,7 @@ export default function StaffDashboard() {
                             onClick={() => initiateStatusTransition(order, 'PREPARING')} 
                             className="flex-1 bg-yellow-600/25 hover:bg-yellow-600/35 text-yellow-300 border border-yellow-500/30 text-[11px] uppercase tracking-wider font-bold py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-lg shadow-yellow-950/20"
                           >
-                            <span>Start Preparing (2-Step)</span>
+                            <span>Start Preparing</span>
                             <ArrowRight size={13} />
                           </button>
                         )}
@@ -844,7 +816,7 @@ export default function StaffDashboard() {
                             onClick={() => initiateStatusTransition(order, 'READY')} 
                             className="flex-1 bg-green-600/25 hover:bg-green-600/35 text-green-300 border border-green-500/30 text-[11px] uppercase tracking-wider font-bold py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-lg shadow-green-950/20"
                           >
-                            <span>Mark Ready for Pickup (2-Step)</span>
+                            <span>Mark Ready for Pickup</span>
                             <ArrowRight size={13} />
                           </button>
                         )}
@@ -855,7 +827,7 @@ export default function StaffDashboard() {
                             className="flex-1 bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 text-[11px] uppercase tracking-wider font-bold py-2.5 rounded-xl transition-all flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-950/30"
                           >
                             <CheckCircle2 size={13} />
-                            <span>Verify Handover (2-Step)</span>
+                            <span>Handed Over</span>
                           </button>
                         )}
 
@@ -863,7 +835,7 @@ export default function StaffDashboard() {
                         <button 
                           onClick={() => initiateStatusTransition(order, 'CANCELLED')} 
                           className="px-3.5 bg-red-950/20 hover:bg-red-900/30 text-red-400 border border-red-800/30 text-[11px] uppercase tracking-wider font-semibold py-2.5 rounded-xl transition-all"
-                          title="Cancel Order with 2-Step verification"
+                          title="Cancel Order"
                         >
                           Cancel
                         </button>
@@ -1357,25 +1329,25 @@ export default function StaffDashboard() {
       </div>
 
       {/* ========================================================= */}
-      {/* TWO-STEP VERIFICATION MODAL (NO PASSWORD NEEDED) */}
+      {/* ONE-STEP VERIFICATION MODAL */}
       {/* ========================================================= */}
       {verifyModal.isOpen && verifyModal.order && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1D1D21] border border-white/10 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-[#1D1D21] border border-white/10 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 space-y-5">
             
-            {/* Header with Step indicator */}
+            {/* Modal Header */}
             <div className="flex justify-between items-start pb-4 border-b border-white/10">
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${verifyModal.step === 1 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
-                    Step {verifyModal.step} of 2
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#930E36]/30 text-[#FF004B] border border-[#930E36]/50">
+                    Verify Status Update
                   </span>
                   <h3 className="font-bold text-white text-base">
-                    {verifyModal.step === 1 ? 'Verify Order Details' : 'Operational Confirmation'}
+                    Order #{verifyModal.order.id}
                   </h3>
                 </div>
                 <p className="text-xs text-white/50 mt-1">
-                  Transition: <span className="font-mono text-white/80">{verifyModal.order.status}</span> → <span className="font-mono text-[#FF004B] font-bold">{verifyModal.targetStatus}</span> (Zero Password Required)
+                  Transition: <span className="font-mono text-white/80">{verifyModal.order.status}</span> → <span className="font-mono text-[#FF004B] font-bold">{verifyModal.targetStatus}</span>
                 </p>
               </div>
 
@@ -1387,234 +1359,84 @@ export default function StaffDashboard() {
               </button>
             </div>
 
-            {/* Stepper Progress Line */}
-            <div className="grid grid-cols-2 gap-2 my-4">
-              <div className={`h-1.5 rounded-full transition-all ${verifyModal.step >= 1 ? 'bg-[#930E36]' : 'bg-white/10'}`} />
-              <div className={`h-1.5 rounded-full transition-all ${verifyModal.step === 2 ? 'bg-[#FF004B]' : 'bg-white/10'}`} />
+            {/* Order Details & Token */}
+            <div className="bg-black/40 border border-white/5 rounded-2xl p-4 space-y-2.5">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="font-mono text-[11px] text-white/40 uppercase tracking-wider">Pickup Token</span>
+                  <div className="font-mono font-bold text-xl text-[#FF004B]">
+                    {verifyModal.order.pickup_token || `TK-${1000 + (verifyModal.order.id % 9000)}`}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono text-[11px] text-white/40 uppercase tracking-wider">Total Amount</span>
+                  <div className="font-mono font-bold text-xl text-emerald-400">
+                    ₹{verifyModal.order.totalAmount}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-white/5 flex justify-between items-center text-xs text-white/70">
+                <div>Customer: <span className="text-white font-semibold">{verifyModal.order.customer_name || verifyModal.order.customer?.fullName || 'Campus Student'}</span></div>
+                {verifyModal.order.customer_phone && <div className="text-white/40 font-mono">{verifyModal.order.customer_phone}</div>}
+              </div>
             </div>
 
-            {/* STEP 1: REVIEW ORDER & CHECK ITEMS */}
-            {verifyModal.step === 1 && (
-              <div className="space-y-4">
-                
-                {/* Order & Customer Summary Box */}
-                <div className="bg-black/40 border border-white/5 rounded-2xl p-4 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="font-mono text-xs text-white/40">Order Reference</span>
-                      <div className="font-mono font-bold text-lg text-white">#{verifyModal.order.id}</div>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-mono text-xs text-white/40">Pickup Token</span>
-                      <div className="font-mono font-bold text-lg text-[#FF004B]">
-                        {verifyModal.order.pickup_token || `TK-${1000 + (verifyModal.order.id % 9000)}`}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-white/5 flex justify-between items-center text-xs text-white/70">
-                    <div>Customer: <span className="text-white font-semibold">{verifyModal.order.customer_name || verifyModal.order.customer?.fullName}</span></div>
-                    <div className="font-mono font-bold text-emerald-400">₹{verifyModal.order.totalAmount}</div>
-                  </div>
-                </div>
-
-                {/* Items Checklist for Kitchen Staff */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">
-                      Verify Items Checklist
+            {/* Items Summary */}
+            <div>
+              <div className="text-xs font-semibold text-white/70 uppercase tracking-wider mb-2">
+                Order Items ({verifyModal.order.items?.length || 0})
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-xl divide-y divide-white/5 max-h-36 overflow-y-auto">
+                {verifyModal.order.items?.map(oi => (
+                  <div key={oi.id} className="p-2.5 px-3 flex items-center justify-between text-xs">
+                    <span className="text-white font-medium">
+                      <span className="font-bold text-[#FF004B] mr-2">{oi.quantity}x</span>
+                      {oi.item.name}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const allChecked: Record<number, boolean> = {};
-                        verifyModal.order?.items?.forEach(oi => { allChecked[oi.id] = true; });
-                        setVerifyModal(prev => ({ ...prev, itemChecks: allChecked }));
-                      }}
-                      className="text-[10px] text-[#FF004B] hover:underline font-semibold"
-                    >
-                      Check All Items
-                    </button>
+                    <span className="font-mono text-white/50 text-[11px]">₹{oi.item.price * oi.quantity}</span>
                   </div>
-
-                  <div className="bg-white/[0.02] border border-white/5 rounded-xl divide-y divide-white/5 max-h-48 overflow-y-auto">
-                    {verifyModal.order.items?.map(oi => {
-                      const isChecked = !!verifyModal.itemChecks[oi.id];
-                      return (
-                        <div 
-                          key={oi.id}
-                          onClick={() => {
-                            setVerifyModal(prev => ({
-                              ...prev,
-                              itemChecks: { ...prev.itemChecks, [oi.id]: !isChecked }
-                            }));
-                          }}
-                          className="p-3 flex items-center justify-between cursor-pointer hover:bg-white/[0.04] transition-colors"
-                        >
-                          <div className="flex items-center space-x-3">
-                            {isChecked ? (
-                              <CheckSquare size={16} className="text-[#FF004B]" />
-                            ) : (
-                              <Square size={16} className="text-white/30" />
-                            )}
-                            <span className="text-xs text-white font-medium">
-                              <span className="font-bold text-[#FF004B] mr-1.5">{oi.quantity}x</span>
-                              {oi.item.name}
-                            </span>
-                          </div>
-                          <span className="font-mono text-[11px] text-white/40">₹{oi.item.price * oi.quantity}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Step 1 Actions */}
-                <div className="flex gap-3 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setVerifyModal(prev => ({ ...prev, isOpen: false }))}
-                    className="flex-1 bg-white/5 hover:bg-white/10 text-white/60 font-semibold py-2.5 rounded-xl text-xs uppercase tracking-wider"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleStep1Proceed}
-                    className="flex-1 bg-[#930E36] hover:bg-[#B31242] text-white font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-[#930E36]/30"
-                  >
-                    <span>Proceed to Step 2</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-
+                ))}
               </div>
-            )}
+            </div>
 
-            {/* STEP 2: OPERATIONAL CHECKLIST & CONFIRM */}
-            {verifyModal.step === 2 && (
-              <div className="space-y-4">
-                
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-3.5">
-                  <div className="text-xs font-bold text-white uppercase tracking-wider">
-                    Operational Checklist for {verifyModal.targetStatus}
-                  </div>
+            {/* Verification Note Banner */}
+            <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 text-xs text-white/80 flex items-center space-x-2.5">
+              <CheckCircle2 size={16} className="text-[#FF004B] shrink-0" />
+              <span>
+                {verifyModal.targetStatus === 'PREPARING' && 'Confirm kitchen cooking initiated.'}
+                {verifyModal.targetStatus === 'READY' && `Confirm order packed and placed at pickup counter for token ${verifyModal.order.pickup_token}.`}
+                {verifyModal.targetStatus === 'COMPLETED' && `Confirm customer presented matching token ${verifyModal.order.pickup_token} and food handed over.`}
+                {verifyModal.targetStatus === 'CANCELLED' && 'Confirm cancellation of this order for your stall.'}
+                {verifyModal.targetStatus === 'PLACED' && 'Confirm order accepted into stall queue.'}
+              </span>
+            </div>
 
-                  {/* Contextual checks based on target state */}
-                  {verifyModal.targetStatus === 'PREPARING' && (
-                    <label className="flex items-start space-x-3 cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={verifyModal.prepCheck}
-                        onChange={e => setVerifyModal(prev => ({ ...prev, prepCheck: e.target.checked }))}
-                        className="mt-0.5 accent-[#FF004B] rounded"
-                      />
-                      <span className="text-xs text-white/80">
-                        Kitchen station is actively preparing this order and ingredients are available.
-                      </span>
-                    </label>
-                  )}
-
-                  {verifyModal.targetStatus === 'READY' && (
-                    <label className="flex items-start space-x-3 cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={verifyModal.prepCheck}
-                        onChange={e => setVerifyModal(prev => ({ ...prev, prepCheck: e.target.checked }))}
-                        className="mt-0.5 accent-[#FF004B] rounded"
-                      />
-                      <span className="text-xs text-white/80">
-                        All items are fully packed and placed on the counter for Pickup Token <strong className="text-white font-mono">{verifyModal.order.pickup_token}</strong>.
-                      </span>
-                    </label>
-                  )}
-
-                  {verifyModal.targetStatus === 'COMPLETED' && (
-                    <>
-                      <label className="flex items-start space-x-3 cursor-pointer">
-                        <input 
-                          type="checkbox"
-                          checked={verifyModal.handoverCheck}
-                          onChange={e => setVerifyModal(prev => ({ ...prev, handoverCheck: e.target.checked }))}
-                          className="mt-0.5 accent-[#FF004B] rounded"
-                        />
-                        <span className="text-xs text-white/80">
-                          Customer presented matching Pickup Token <strong className="text-emerald-400 font-mono">{verifyModal.order.pickup_token}</strong>.
-                        </span>
-                      </label>
-                      <label className="flex items-start space-x-3 cursor-pointer">
-                        <input 
-                          type="checkbox"
-                          checked={verifyModal.prepCheck}
-                          onChange={e => setVerifyModal(prev => ({ ...prev, prepCheck: e.target.checked }))}
-                          className="mt-0.5 accent-[#FF004B] rounded"
-                        />
-                        <span className="text-xs text-white/80">
-                          Food package successfully handed over to customer.
-                        </span>
-                      </label>
-                    </>
-                  )}
-
-                  {verifyModal.targetStatus === 'CANCELLED' && (
-                    <label className="flex items-start space-x-3 cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={verifyModal.prepCheck}
-                        onChange={e => setVerifyModal(prev => ({ ...prev, prepCheck: e.target.checked }))}
-                        className="mt-0.5 accent-[#FF004B] rounded"
-                      />
-                      <span className="text-xs text-white/80">
-                        Verified cancellation reason (item unavailable or requested by student).
-                      </span>
-                    </label>
-                  )}
-
-                  {/* Stall staff acknowledgement */}
-                  <div className="pt-2 border-t border-white/5">
-                    <label className="flex items-start space-x-3 cursor-pointer">
-                      <input 
-                        type="checkbox"
-                        checked={verifyModal.confirmCheck}
-                        onChange={e => setVerifyModal(prev => ({ ...prev, confirmCheck: e.target.checked }))}
-                        className="mt-0.5 accent-[#FF004B] rounded"
-                      />
-                      <span className="text-xs text-white/90 font-semibold">
-                        I confirm this status update on behalf of {stallInfo?.name || currentUser?.shopName || 'our stall'}.
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Step 2 Actions */}
-                <div className="flex gap-3 pt-3">
-                  <button
-                    type="button"
-                    onClick={handleStep2Back}
-                    className="flex-1 bg-white/5 hover:bg-white/10 text-white/60 font-semibold py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5"
-                  >
-                    <ArrowLeft size={14} />
-                    <span>Back to Step 1</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={verifyModal.isSubmitting || !verifyModal.confirmCheck}
-                    onClick={executeStatusUpdate}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-950/40"
-                  >
-                    {verifyModal.isSubmitting ? (
-                      <span>Updating...</span>
-                    ) : (
-                      <>
-                        <Check size={14} />
-                        <span>Confirm & Update</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-              </div>
-            )}
+            {/* Modal Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setVerifyModal(prev => ({ ...prev, isOpen: false }))}
+                className="flex-1 bg-white/5 hover:bg-white/10 text-white/60 font-semibold py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={verifyModal.isSubmitting}
+                onClick={executeStatusUpdate}
+                className="flex-1 bg-[#930E36] hover:bg-[#B31242] disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center space-x-1.5 shadow-lg shadow-[#930E36]/30 transition-all"
+              >
+                {verifyModal.isSubmitting ? (
+                  <span>Updating...</span>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    <span>Confirm & Update Status</span>
+                  </>
+                )}
+              </button>
+            </div>
 
           </div>
         </div>
