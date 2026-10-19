@@ -33,8 +33,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
       return;
     }
 
-    if (!email.toLowerCase().endsWith('@vitstudent.ac.in')) {
-      setError('Email must end with @vitstudent.ac.in');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Please enter a valid email address');
       return;
     }
 
@@ -143,13 +144,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
             )}
 
             <div>
-              <label className="block text-xs text-white/80 mb-1.5 uppercase tracking-wider">CAMPUS EMAIL</label>
+              <label className="block text-xs text-white/80 mb-1.5 uppercase tracking-wider">EMAIL ADDRESS</label>
               <div className="relative">
                 <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type="email"
                   required
-                  placeholder="mehta.samyak@vitstudent.ac.in"
+                  placeholder="name@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-11 pr-4 py-3 bg-[#930E36]/30 border border-[#930E36]/50 rounded-2xl text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#930E36] transition-all"

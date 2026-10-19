@@ -88,7 +88,7 @@ npx tsx prisma/seed.ts
 
 ## Authentication Gate Flow Overview
 - Any unauthenticated user accessing `http://localhost:5173/` or any route is instantly presented with the **Login / Sign Up** page (`/login`).
-- After entering valid VIT credentials (`@vitstudent.ac.in`), the user is authenticated, assigned a JWT session, and granted access to browse Campus Outlets & place takeaway orders.
+- After entering valid credentials (standard email address) or registering a new account, the user is authenticated, assigned a JWT session, and granted access to browse Campus Outlets & place takeaway orders.
 
 ---
 

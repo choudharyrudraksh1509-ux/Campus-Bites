@@ -73,8 +73,9 @@ export default function Login({ onSuccess }: LoginProps) {
       setError('Please enter your full name.');
       return false;
     }
-    if (loginType === 'USER' && (!email.trim() || !email.toLowerCase().endsWith('@vitstudent.ac.in'))) {
-      setError('User email must end with @vitstudent.ac.in (e.g. samyak.m2023@vitstudent.ac.in)');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (loginType === 'USER' && (!email.trim() || !emailRegex.test(email.trim()))) {
+      setError('Please enter a valid email address.');
       return false;
     }
     if (loginType === 'STAFF') {
@@ -291,14 +292,14 @@ export default function Login({ onSuccess }: LoginProps) {
 
             <div>
               <label className="block text-xs text-white/80 mb-1.5 uppercase tracking-wider">
-                {loginType === 'USER' ? 'USER EMAIL (@vitstudent.ac.in)' : 'STALL STAFF ID'}
+                {loginType === 'USER' ? 'EMAIL ADDRESS' : 'STALL STAFF ID'}
               </label>
               <div className="relative">
                 <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                 <input
                   type={loginType === 'USER' ? 'email' : 'text'}
                   required
-                  placeholder={loginType === 'USER' ? 'your.name@vitstudent.ac.in' : 'Select a stall above or enter ID'}
+                  placeholder={loginType === 'USER' ? 'your.name@example.com' : 'Select a stall above or enter ID'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-11 pr-4 py-3.5 bg-[#930E36]/30 border border-[#930E36]/50 rounded-2xl text-xs text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#930E36]"

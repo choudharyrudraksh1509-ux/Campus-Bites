@@ -245,7 +245,7 @@ erDiagram
 Stores credentials and personal details for all actors (Customers, Staff, Owners, Admins).
 - `id` (INT, Primary Key, Auto Increment)
 - `fullName` (VARCHAR(120), NOT NULL)
-- `email` (VARCHAR(180), NOT NULL, UNIQUE) — Enforces university email domains (`@vitstudent.ac.in`)
+- `email` (VARCHAR(180), NOT NULL, UNIQUE) — Standard unique user/customer email address format
 - `phone` (VARCHAR(20), NULLABLE)
 - `passwordHash` (VARCHAR(255), NOT NULL) — Bcrypt encrypted hash
 - `isActive` (BOOLEAN, NOT NULL, DEFAULT TRUE)
@@ -617,7 +617,7 @@ To ensure maximum clarity during presentation and ensure that each group member 
 #### Assigned Presentation Scope:
 - **Presentation Segment:** Minutes 0:00 to 4:00 (Introduction, Authentication Gate, Outlet Discovery, Stall Staff Security)
 - **What to Demonstrate Live:**
-  1. Show the unauthenticated login screen: explain the strict university email gating (`@vitstudent.ac.in`).
+  1. Show the unauthenticated login screen: explain the customer authentication and email format validation.
   2. Demonstrate customer sign-up and login, explaining how JWT tokens authenticate subsequent requests.
   3. Show the Outlet Hub: 9 campus outlets categorized across Gazebo Complex, North Square, Hunger, and Gymkhana.
   4. Demonstrate the **Stall-Specific Staff Login**: show how staff choose their stall (e.g., Gazebo 1) and log in with stall credentials (`staff.gazebo1@campusbites.com`). Show how the system rejects staff trying to operate another stall's orders.

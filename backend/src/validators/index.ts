@@ -23,9 +23,7 @@ export const validateRequest = (schema: ZodSchema) =>
 export const registerSchema = z.object({
   body: z.object({
     fullName: z.string().min(1, 'Name cannot be empty').max(120),
-    email: z.string().email('Invalid email address').refine(val => val.toLowerCase().endsWith('@vitstudent.ac.in'), {
-      message: 'Email must end with @vitstudent.ac.in'
-    }),
+    email: z.string().email('Invalid email address'),
     password: z.string().min(1, 'Password cannot be empty').max(255),
     phone: z.string().max(20).optional(),
     role: z.enum(['CUSTOMER', 'STAFF', 'OWNER']).default('CUSTOMER')

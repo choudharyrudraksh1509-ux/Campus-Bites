@@ -108,7 +108,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
     }
   };
 
-  const roleName = user?.role === 'CUSTOMER' ? 'STUDENT' : user?.role || 'STUDENT';
+  const roleName = user?.role === 'CUSTOMER' ? 'CUSTOMER' : user?.role || 'CUSTOMER';
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#4C1829] sm:bg-black/80 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center p-0 sm:p-4 animate-fade-in">
@@ -164,10 +164,10 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
 
           {/* Edit Profile Form */}
           <form onSubmit={handleSubmit} className="mt-4 space-y-4 flex-1 overflow-y-auto pr-1">
-            {/* Read-Only Campus Email */}
+            {/* Read-Only Email */}
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <label className="block text-xs text-white/70 uppercase tracking-wider font-medium">CAMPUS EMAIL</label>
+                <label className="block text-xs text-white/70 uppercase tracking-wider font-medium">EMAIL ADDRESS</label>
                 <span className="text-[10px] text-white/40 uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded-md">Read-only</span>
               </div>
               <div className="relative">
