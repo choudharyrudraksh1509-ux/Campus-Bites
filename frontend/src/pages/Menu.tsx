@@ -14,6 +14,7 @@ interface MenuItem {
   price: number;
   description?: string;
   is_veg?: boolean;
+  quantityAvailable?: number | null;
 }
 
 // Full Campus Outlets Menus (Includes exact items from Healthy & Tasty price list + user specified outlets)
@@ -245,6 +246,7 @@ export default function Menu() {
             item_name: item.name || item.item_name,
             category_name: item.category?.name || item.category_name || 'General',
             price: Number(item.price),
+            quantityAvailable: item.quantityAvailable,
             is_veg: item.is_veg !== undefined ? item.is_veg : !item.name.toLowerCase().includes('chicken') && !item.name.toLowerCase().includes('egg')
           })));
           setShopName(res.data[0]?.shop?.name || FULL_MOCK_MENUS[sId]?.shop_name || 'Campus Outlet');
@@ -472,7 +474,14 @@ export default function Menu() {
 
                       <div>
                         <h3 className="text-sm text-white">{item.item_name}</h3>
-                        <p className="text-xs text-white/80 mt-0.5">{item.category_name}</p>
+                        <div className="flex items-center space-x-2 mt-0.5">
+                          <p className="text-xs text-white/80">{item.category_name}</p>
+                          {item.quantityAvailable !== undefined && item.quantityAvailable !== null && (
+                            <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/30 px-1.5 py-0.2 rounded font-mono font-medium">
+                              {item.quantityAvailable} left
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-white mt-1">₹{item.price}</p>
                       </div>
                     </div>

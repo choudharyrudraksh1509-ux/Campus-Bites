@@ -111,12 +111,14 @@ CREATE TABLE Food_Item (
     description VARCHAR(500),
 
     price DECIMAL(10,2) NOT NULL,
+    quantity_available INT NULL DEFAULT NULL,
     is_available BOOLEAN NOT NULL DEFAULT TRUE,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     CHECK (price >= 0),
+    CHECK (quantity_available IS NULL OR quantity_available >= 0),
 
     FOREIGN KEY (shop_id) REFERENCES Shop(shop_id) ON DELETE CASCADE,
     FOREIGN KEY (category_id) REFERENCES Category(category_id) ON DELETE RESTRICT

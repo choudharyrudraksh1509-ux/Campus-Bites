@@ -291,6 +291,7 @@ Junction table mapping staff users to their authorized stalls.
 - `name` (VARCHAR(140), NOT NULL)
 - `description` (VARCHAR(500))
 - `price` (DECIMAL(10,2) / FLOAT, NOT NULL, CHECK: `price >= 0`)
+- `quantityAvailable` (INT, NULLABLE, CHECK: `quantityAvailable >= 0`) — Optional limited quantity/stock tracking
 - `isAvailable` (BOOLEAN, NOT NULL, DEFAULT TRUE)
 
 ### 8. `Orders` Table (Transactional Header)

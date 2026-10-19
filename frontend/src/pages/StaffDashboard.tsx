@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -25,9 +25,27 @@ import {
   CheckSquare, 
   Square, 
   SlidersHorizontal, 
+  ChevronDown,
   X 
 } from 'lucide-react';
 import api from '../services/api';
+
+const DEFAULT_CATEGORIES = [
+  'Rolls',
+  'Maggi & Noodles',
+  'Beverages',
+  'Snacks & Starters',
+  'Burgers & Fries',
+  'Meals & Thalis',
+  'Pizzas',
+  'Sandwiches',
+  'South Indian',
+  'Chaat & Street Food',
+  'Desserts',
+  'Biryani & Rice',
+  'Curries & Breads',
+  'Specialties'
+];
 
 interface FoodItem {
   id: number;
@@ -38,6 +56,7 @@ interface FoodItem {
   description?: string;
   price: number;
   isAvailable: boolean;
+  quantityAvailable?: number | null;
   category_id?: number;
   category_name?: string;
 }
@@ -117,6 +136,15 @@ export default function StaffDashboard() {
     isSubmitting: false
   });
 
+  // Computed available categories list
+  const availableCategories = useMemo(() => {
+    const catSet = new Set<string>();
+    categories.forEach(c => { if (c.name?.trim()) catSet.add(c.name.trim()); });
+    menu.forEach(m => { if (m.category_name?.trim()) catSet.add(m.category_name.trim()); });
+    DEFAULT_CATEGORIES.forEach(c => catSet.add(c));
+    return Array.from(catSet).sort();
+  }, [categories, menu]);
+
   // Menu Modal State (Add/Edit)
   const [menuModal, setMenuModal] = useState<{
     isOpen: boolean;
@@ -126,6 +154,8 @@ export default function StaffDashboard() {
     price: string;
     description: string;
     categoryName: string;
+    isCustomCategory: boolean;
+    quantityAvailable: string;
     isAvailable: boolean;
     isSubmitting: boolean;
   }>({
@@ -136,6 +166,8 @@ export default function StaffDashboard() {
     price: '',
     description: '',
     categoryName: '',
+    isCustomCategory: false,
+    quantityAvailable: '',
     isAvailable: true,
     isSubmitting: false
   });
@@ -337,13 +369,21 @@ export default function StaffDashboard() {
       name: '',
       price: '',
       description: '',
-      categoryName: categories[0]?.name || 'Specialties',
+      categoryName: availableCategories[0] || 'Specialties',
+      isCustomCategory: false,
+      quantityAvailable: '',
       isAvailable: true,
       isSubmitting: false
     });
   };
 
   const openEditMenuModal = (item: FoodItem) => {
+    const itemCat = item.category_name || (categories.find(c => c.id === item.category_id)?.name) || 'Specialties';
+    const isKnown = availableCategories.includes(itemCat);
+    const qtyStr = item.quantityAvailable !== undefined && item.quantityAvailable !== null
+      ? String(item.quantityAvailable)
+      : '';
+
     setMenuModal({
       isOpen: true,
       mode: 'edit',
@@ -351,7 +391,9 @@ export default function StaffDashboard() {
       name: item.name || item.item_name || '',
       price: String(item.price || ''),
       description: item.description || '',
-      categoryName: item.category_name || categories[0]?.name || 'Specialties',
+      categoryName: itemCat,
+      isCustomCategory: !isKnown,
+      quantityAvailable: qtyStr,
       isAvailable: item.isAvailable !== false,
       isSubmitting: false
     });
@@ -364,14 +406,31 @@ export default function StaffDashboard() {
       return;
     }
 
+    if (!menuModal.categoryName.trim()) {
+      showToast('Please select or specify a category', 'error');
+      return;
+    }
+
+    const trimmedQty = menuModal.quantityAvailable.trim();
+    let qtyNum: number | null = null;
+    if (trimmedQty !== '') {
+      const parsed = parseInt(trimmedQty, 10);
+      if (isNaN(parsed) || parsed < 0) {
+        showToast('Quantity available must be a valid non-negative number', 'error');
+        return;
+      }
+      qtyNum = parsed;
+    }
+
     setMenuModal(prev => ({ ...prev, isSubmitting: true }));
     try {
-      const payload = {
+      const payload: any = {
         name: menuModal.name.trim(),
         price: Number(menuModal.price),
         description: menuModal.description.trim(),
         categoryName: menuModal.categoryName.trim(),
-        isAvailable: menuModal.isAvailable
+        isAvailable: menuModal.isAvailable,
+        quantityAvailable: qtyNum
       };
 
       if (menuModal.mode === 'add') {
@@ -1088,10 +1147,21 @@ export default function StaffDashboard() {
                             </td>
                             <td className="px-5 py-3.5 text-center">
                               {isAvail ? (
-                                <span className="inline-flex items-center text-emerald-400 bg-emerald-950/40 border border-emerald-700/50 px-2.5 py-1 rounded-full text-[10px] font-semibold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5" />
-                                  Available
-                                </span>
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="inline-flex items-center text-emerald-400 bg-emerald-950/40 border border-emerald-700/50 px-2.5 py-1 rounded-full text-[10px] font-semibold">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5" />
+                                    Available
+                                  </span>
+                                  {item.quantityAvailable !== undefined && item.quantityAvailable !== null ? (
+                                    <span className="text-[10px] font-mono text-amber-300 font-medium">
+                                      {item.quantityAvailable} left
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-white/30 font-medium">
+                                      Unlimited
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="inline-flex items-center text-red-400 bg-red-950/40 border border-red-700/50 px-2.5 py-1 rounded-full text-[10px] font-semibold">
                                   <span className="w-1.5 h-1.5 rounded-full bg-red-400 mr-1.5" />
@@ -1515,19 +1585,63 @@ export default function StaffDashboard() {
                   <label className="block text-xs font-semibold text-white/70 uppercase tracking-wider mb-1.5">
                     Category
                   </label>
-                  <input
-                    type="text"
-                    required
-                    list="cat-suggestions"
-                    placeholder="e.g. Rolls, Maggie..."
-                    value={menuModal.categoryName}
-                    onChange={e => setMenuModal(prev => ({ ...prev, categoryName: e.target.value }))}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#FF004B]"
-                  />
-                  <datalist id="cat-suggestions">
-                    {categories.map(c => <option key={c.id} value={c.name} />)}
-                  </datalist>
+                  <div className="relative">
+                    <select
+                      value={menuModal.isCustomCategory ? '__CUSTOM__' : menuModal.categoryName}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '__CUSTOM__') {
+                          setMenuModal(prev => ({ ...prev, isCustomCategory: true, categoryName: '' }));
+                        } else {
+                          setMenuModal(prev => ({ ...prev, isCustomCategory: false, categoryName: val }));
+                        }
+                      }}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#FF004B] cursor-pointer appearance-none"
+                    >
+                      <option value="" disabled className="bg-[#1D1D21] text-white">-- Select Category --</option>
+                      {availableCategories.map(cat => (
+                        <option key={cat} value={cat} className="bg-[#1D1D21] text-white">
+                          {cat}
+                        </option>
+                      ))}
+                      <option value="__CUSTOM__" className="bg-[#1D1D21] text-[#FF004B] font-semibold">
+                        + Add Custom Category...
+                      </option>
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+                  </div>
+                  {menuModal.isCustomCategory && (
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      placeholder="Type new category name..."
+                      value={menuModal.categoryName}
+                      onChange={e => setMenuModal(prev => ({ ...prev, categoryName: e.target.value }))}
+                      className="w-full mt-2 bg-black/40 border border-[#FF004B]/50 rounded-xl px-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#FF004B]"
+                    />
+                  )}
                 </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-semibold text-white/70 uppercase tracking-wider">
+                    Quantity Available (Optional)
+                  </label>
+                  <span className="text-[10px] text-white/40 font-mono">Optional</span>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 20 (leave blank if unlimited)"
+                  value={menuModal.quantityAvailable}
+                  onChange={e => setMenuModal(prev => ({ ...prev, quantityAvailable: e.target.value }))}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono placeholder-white/30 focus:outline-none focus:border-[#FF004B]"
+                />
+                <p className="text-[10px] text-white/40 mt-1">
+                  Leave blank if this item is prepared on demand and has unlimited stock.
+                </p>
               </div>
 
               <div>

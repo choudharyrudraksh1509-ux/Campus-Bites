@@ -191,19 +191,30 @@ export const getStaffMenu = async (req: AuthRequest, res: Response): Promise<voi
             orderBy: [{ categoryId: 'asc' }, { name: 'asc' }]
         });
 
-        const mapped = items.map(item => ({
-            id: item.id,
-            item_id: item.id,
-            shop_id: item.shopId,
-            shop_name: item.shop.name,
-            name: item.name,
-            item_name: item.name,
-            description: item.description || '',
-            price: item.price,
-            isAvailable: item.isAvailable,
-            category_id: item.categoryId,
-            category_name: item.category.name
-        }));
+        const mapped = items.map(item => {
+            let cleanDescription = item.description || '';
+            let quantityAvailable: number | null = null;
+            const match = cleanDescription.match(/\[Qty:\s*(\d+)\]/i);
+            if (match) {
+                quantityAvailable = parseInt(match[1], 10);
+                cleanDescription = cleanDescription.replace(/\[Qty:\s*(\d+)\]/i, '').trim();
+            }
+
+            return {
+                id: item.id,
+                item_id: item.id,
+                shop_id: item.shopId,
+                shop_name: item.shop.name,
+                name: item.name,
+                item_name: item.name,
+                description: cleanDescription,
+                price: item.price,
+                isAvailable: item.isAvailable,
+                quantityAvailable,
+                category_id: item.categoryId,
+                category_name: item.category.name
+            };
+        });
 
         res.json(mapped);
     } catch (error) {
@@ -219,7 +230,7 @@ export const addStaffMenuItem = async (req: AuthRequest, res: Response): Promise
         const shop = await getStaffAssignedShop(staffId, req.user?.shopId);
         if (!shop) { res.status(404).json({ error: 'No stall found for staff' }); return; }
 
-        const { name, price, description, categoryId, categoryName, isAvailable } = req.body;
+        const { name, price, description, categoryId, categoryName, isAvailable, quantityAvailable } = req.body;
         if (!name || !name.trim()) {
             res.status(400).json({ error: 'Item name is required' });
             return;
@@ -241,12 +252,23 @@ export const addStaffMenuItem = async (req: AuthRequest, res: Response): Promise
             finalCategoryId = cat.id;
         }
 
+        let finalDescription = (description || '').trim();
+        let parsedQty: number | null = null;
+        if (quantityAvailable !== undefined && quantityAvailable !== null && quantityAvailable !== '') {
+            const num = parseInt(String(quantityAvailable), 10);
+            if (!isNaN(num) && num >= 0) {
+                parsedQty = num;
+                finalDescription = finalDescription.replace(/\[Qty:\s*(\d+)\]/i, '').trim();
+                finalDescription = finalDescription ? `${finalDescription} [Qty: ${parsedQty}]` : `[Qty: ${parsedQty}]`;
+            }
+        }
+
         const newItem = await prisma.foodItem.create({
             data: {
                 shopId: shop.id,
                 categoryId: finalCategoryId,
                 name: name.trim(),
-                description: (description || '').trim(),
+                description: finalDescription,
                 price: Number(price),
                 isAvailable: isAvailable !== false
             },
@@ -261,7 +283,8 @@ export const addStaffMenuItem = async (req: AuthRequest, res: Response): Promise
                 name: newItem.name,
                 item_name: newItem.name,
                 price: newItem.price,
-                description: newItem.description,
+                description: (description || '').trim(),
+                quantityAvailable: parsedQty,
                 isAvailable: newItem.isAvailable,
                 category_name: newItem.category.name
             }
@@ -288,13 +311,33 @@ export const updateStaffMenuItem = async (req: AuthRequest, res: Response): Prom
             return;
         }
 
-        const { name, price, description, categoryId, categoryName, isAvailable } = req.body;
+        const { name, price, description, categoryId, categoryName, isAvailable, quantityAvailable } = req.body;
         const updateData: any = {};
 
         if (name !== undefined) updateData.name = name.trim();
         if (price !== undefined && !isNaN(Number(price))) updateData.price = Number(price);
-        if (description !== undefined) updateData.description = description.trim();
         if (isAvailable !== undefined) updateData.isAvailable = Boolean(isAvailable);
+
+        if (description !== undefined || quantityAvailable !== undefined) {
+            let baseDesc = description !== undefined
+                ? description.trim().replace(/\[Qty:\s*(\d+)\]/i, '').trim()
+                : (existing.description || '').replace(/\[Qty:\s*(\d+)\]/i, '').trim();
+
+            if (quantityAvailable !== undefined) {
+                if (quantityAvailable !== null && quantityAvailable !== '') {
+                    const qNum = parseInt(String(quantityAvailable), 10);
+                    if (!isNaN(qNum) && qNum >= 0) {
+                        baseDesc = baseDesc ? `${baseDesc} [Qty: ${qNum}]` : `[Qty: ${qNum}]`;
+                    }
+                }
+            } else {
+                const existingMatch = (existing.description || '').match(/\[Qty:\s*(\d+)\]/i);
+                if (existingMatch) {
+                    baseDesc = baseDesc ? `${baseDesc} ${existingMatch[0]}` : existingMatch[0];
+                }
+            }
+            updateData.description = baseDesc;
+        }
 
         if (categoryId !== undefined && !isNaN(Number(categoryId))) {
             updateData.categoryId = Number(categoryId);
@@ -313,6 +356,14 @@ export const updateStaffMenuItem = async (req: AuthRequest, res: Response): Prom
             include: { category: true }
         });
 
+        let cleanDescription = updated.description || '';
+        let retQty: number | null = null;
+        const match = cleanDescription.match(/\[Qty:\s*(\d+)\]/i);
+        if (match) {
+            retQty = parseInt(match[1], 10);
+            cleanDescription = cleanDescription.replace(/\[Qty:\s*(\d+)\]/i, '').trim();
+        }
+
         res.json({
             message: 'Menu item updated successfully',
             item: {
@@ -321,7 +372,8 @@ export const updateStaffMenuItem = async (req: AuthRequest, res: Response): Prom
                 name: updated.name,
                 item_name: updated.name,
                 price: updated.price,
-                description: updated.description,
+                description: cleanDescription,
+                quantityAvailable: retQty,
                 isAvailable: updated.isAvailable,
                 category_name: updated.category.name
             }

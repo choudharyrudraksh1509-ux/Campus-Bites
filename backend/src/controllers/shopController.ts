@@ -51,14 +51,26 @@ export const getShopMenu = async (req: Request, res: Response): Promise<void> =>
             where: { shopId: Number(shopId), isAvailable: true },
             include: { category: true, shop: true }
         });
-        const mapped = items.map(item => ({
-            item_id: item.id,
-            shop_id: item.shopId,
-            shop_name: item.shop.name,
-            item_name: item.name,
-            category_name: item.category.name,
-            price: item.price
-        }));
+        const mapped = items.map(item => {
+            let cleanDescription = item.description || '';
+            let quantityAvailable: number | null = null;
+            const match = cleanDescription.match(/\[Qty:\s*(\d+)\]/i);
+            if (match) {
+                quantityAvailable = parseInt(match[1], 10);
+                cleanDescription = cleanDescription.replace(/\[Qty:\s*(\d+)\]/i, '').trim();
+            }
+
+            return {
+                item_id: item.id,
+                shop_id: item.shopId,
+                shop_name: item.shop.name,
+                item_name: item.name,
+                description: cleanDescription,
+                quantityAvailable,
+                category_name: item.category.name,
+                price: item.price
+            };
+        });
         res.json(mapped);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch menu' });
