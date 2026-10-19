@@ -39,6 +39,16 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
       return;
     }
 
+    if (isRegister && phone.trim()) {
+      const cleanPhone = phone.trim().replace(/[\s\-\(\)]/g, '');
+      const indianRegex = /^(?:\+91|91|0)?[6-9]\d{9}$/;
+      const generalRegex = /^\+?[1-9]\d{9,14}$/;
+      if (!indianRegex.test(cleanPhone) && !generalRegex.test(cleanPhone)) {
+        setError('Please enter a valid 10-digit phone number (e.g. 9876543210)');
+        return;
+      }
+    }
+
     if (!password.trim()) {
       setError('Password cannot be empty');
       return;
@@ -48,11 +58,12 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
     try {
       if (isRegister) {
+        const cleanPhone = phone.trim() ? phone.trim().replace(/[\s\-\(\)]/g, '') : undefined;
         const regRes = await api.post('/auth/register', {
           fullName: fullName.trim(),
           email: email.trim().toLowerCase(),
           password: password.trim(),
-          phone: phone.trim() || undefined,
+          phone: cleanPhone,
           role: 'CUSTOMER'
         });
 

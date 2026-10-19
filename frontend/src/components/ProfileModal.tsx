@@ -18,6 +18,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrentPass, setShowCurrentPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -34,6 +35,9 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
     setError('');
     setSuccess('');
     setShowPasswordSection(false);
+    setShowCurrentPass(false);
+    setShowNewPass(false);
+    setShowConfirmPass(false);
   }, [user, isOpen]);
 
   if (!isOpen) return null;
@@ -48,17 +52,36 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
       return;
     }
 
-    if (newPassword) {
+    const trimmedPhone = phone.trim();
+    if (trimmedPhone) {
+      const cleanPhone = trimmedPhone.replace(/[\s\-\(\)]/g, '');
+      const indianRegex = /^(?:\+91|91|0)?[6-9]\d{9}$/;
+      const generalRegex = /^\+?[1-9]\d{9,14}$/;
+      if (!indianRegex.test(cleanPhone) && !generalRegex.test(cleanPhone)) {
+        setError('Please enter a valid 10-digit phone number (e.g. 9876543210)');
+        return;
+      }
+    }
+
+    if (showPasswordSection || currentPassword || newPassword || confirmPassword) {
       if (!currentPassword) {
-        setError('Current password is required to set a new password');
+        setError('Current password is required to change password');
+        return;
+      }
+      if (!newPassword) {
+        setError('Please enter a new password');
         return;
       }
       if (newPassword.length < 6) {
         setError('New password must be at least 6 characters');
         return;
       }
+      if (!confirmPassword) {
+        setError('Please confirm your new password');
+        return;
+      }
       if (newPassword !== confirmPassword) {
-        setError('New passwords do not match');
+        setError('New password and confirm new password do not match');
         return;
       }
     }
@@ -71,14 +94,16 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
         phone?: string | null;
         password?: string;
         currentPassword?: string;
+        confirmPassword?: string;
       } = {
         fullName: fullName.trim(),
-        phone: phone.trim() ? phone.trim() : null,
+        phone: trimmedPhone ? trimmedPhone.replace(/[\s\-\(\)]/g, '') : null,
       };
 
       if (newPassword) {
         payload.password = newPassword;
         payload.currentPassword = currentPassword;
+        payload.confirmPassword = confirmPassword;
       }
 
       const res = await api.put('/auth/profile', payload);
@@ -218,6 +243,11 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
               <button
                 type="button"
                 onClick={() => {
+                  if (showPasswordSection) {
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }
                   setShowPasswordSection(!showPasswordSection);
                   setError('');
                 }}
@@ -288,12 +318,19 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateUser }: Pr
                   <div className="relative">
                     <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
                     <input
-                      type="password"
+                      type={showConfirmPass ? 'text' : 'password'}
                       placeholder="Repeat new password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full pl-11 pr-4 py-2.5 bg-[#930E36]/30 border border-[#930E36]/60 rounded-2xl text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#930E36] transition-all"
+                      className="w-full pl-11 pr-11 py-2.5 bg-[#930E36]/30 border border-[#930E36]/60 rounded-2xl text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#930E36] transition-all"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPass(!showConfirmPass)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
+                    >
+                      {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                 </div>
               </div>

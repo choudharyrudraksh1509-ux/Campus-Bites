@@ -441,29 +441,49 @@ export default function StaffDashboard() {
     e.preventDefault();
     setProfileForm(prev => ({ ...prev, isSubmitting: true, message: '', error: '' }));
 
-    if (profileForm.newPassword) {
+    if (profileForm.phone && profileForm.phone.trim()) {
+      const cleanPhone = profileForm.phone.trim().replace(/[\s\-\(\)]/g, '');
+      const indianRegex = /^(?:\+91|91|0)?[6-9]\d{9}$/;
+      const generalRegex = /^\+?[1-9]\d{9,14}$/;
+      if (!indianRegex.test(cleanPhone) && !generalRegex.test(cleanPhone)) {
+        setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'Please enter a valid 10-digit phone number (e.g. 9876543210)' }));
+        return;
+      }
+    }
+
+    if (profileForm.newPassword || profileForm.currentPassword || profileForm.confirmPassword) {
+      if (!profileForm.currentPassword) {
+        setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'Current password is required to change password' }));
+        return;
+      }
+      if (!profileForm.newPassword) {
+        setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'Please enter a new password' }));
+        return;
+      }
       if (profileForm.newPassword.length < 6) {
         setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'Password must be at least 6 characters' }));
         return;
       }
-      if (profileForm.newPassword !== profileForm.confirmPassword) {
-        setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'New passwords do not match' }));
+      if (!profileForm.confirmPassword) {
+        setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'Please confirm your new password' }));
         return;
       }
-      if (!profileForm.currentPassword) {
-        setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'Current password is required to change password' }));
+      if (profileForm.newPassword !== profileForm.confirmPassword) {
+        setProfileForm(prev => ({ ...prev, isSubmitting: false, error: 'New password and confirm new password do not match' }));
         return;
       }
     }
 
     try {
+      const cleanPhone = profileForm.phone && profileForm.phone.trim() ? profileForm.phone.trim().replace(/[\s\-\(\)]/g, '') : null;
       const payload: any = {
         fullName: profileForm.fullName,
-        phone: profileForm.phone
+        phone: cleanPhone
       };
       if (profileForm.newPassword) {
         payload.currentPassword = profileForm.currentPassword;
         payload.password = profileForm.newPassword;
+        payload.confirmPassword = profileForm.confirmPassword;
       }
 
       const res = await api.put('/auth/profile', payload);

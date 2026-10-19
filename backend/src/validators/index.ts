@@ -25,7 +25,15 @@ export const registerSchema = z.object({
     fullName: z.string().min(1, 'Name cannot be empty').max(120),
     email: z.string().email('Invalid email address'),
     password: z.string().min(1, 'Password cannot be empty').max(255),
-    phone: z.string().max(20).optional(),
+    phone: z.string().max(20).optional().refine(val => {
+      if (!val || !val.trim()) return true;
+      const clean = val.trim().replace(/[\s\-\(\)]/g, '');
+      const indianRegex = /^(?:\+91|91|0)?[6-9]\d{9}$/;
+      const generalRegex = /^\+?[1-9]\d{9,14}$/;
+      return indianRegex.test(clean) || generalRegex.test(clean);
+    }, {
+      message: 'Please enter a valid phone number (e.g. 9876543210)'
+    }),
     role: z.enum(['CUSTOMER', 'STAFF', 'OWNER']).default('CUSTOMER')
   })
 });
