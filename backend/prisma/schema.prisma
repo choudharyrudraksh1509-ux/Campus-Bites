@@ -103,6 +103,11 @@ model Order {
   status      String   @default("PAYMENT_PENDING")
   totalAmount Float
   orderTime   DateTime @default(now())
+  isPreorder  Boolean  @default(false)
+  pickupTime  String?
+  estimatedMinutes Int?
+  queueNumber Int?
+  paymentMethod String? @default("ONLINE")
 
   customer    User     @relation("CustomerOrders", fields: [customerId], references: [id])
   shop        Shop     @relation(fields: [shopId], references: [id])
@@ -145,4 +150,16 @@ model Review {
   order      Order    @relation(fields: [orderId], references: [id])
   customer   User     @relation(fields: [customerId], references: [id])
   shop       Shop     @relation(fields: [shopId], references: [id])
+}
+
+model AutobookSchedule {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  shopId        Int
+  itemId        Int
+  quantity      Int      @default(1)
+  scheduledTime String
+  isActive      Boolean  @default(true)
+  lastRunDate   String?
+  createdAt     DateTime @default(now())
 }

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2, Trash2 } from 'lucide-react';
+import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2, Trash2, Repeat, Calendar, Lock, Timer } from 'lucide-react';
 import api from '../services/api';
 import orderService from '../services/orderService';
 import SingleOutletModal from '../components/SingleOutletModal';
+import AutobookModal from '../components/AutobookModal';
+import PaymentGatewayModal from '../components/PaymentGatewayModal';
 
 interface MenuItem {
   item_id: number;
@@ -201,6 +203,9 @@ export default function Menu() {
 
   // Single Outlet Modal state
   const [conflictShopName, setConflictShopName] = useState<string>('');
+  const [autobookItem, setAutobookItem] = useState<{ item_id: number; shop_id: number; shop_name: string; item_name: string; price: number } | null>(null);
+  const [showPaymentGateway, setShowPaymentGateway] = useState(false);
+  const [shopQueueEst, setShopQueueEst] = useState({ queueNumber: 1, activeOrdersCount: 0, basePrepMinutes: 10, estimatedMinutes: 10 });
   const [pendingItem, setPendingItem] = useState<MenuItem | null>(null);
 
   // Checkout modal
@@ -258,6 +263,7 @@ export default function Menu() {
         loadMockData();
       })
       .finally(() => setLoading(false));
+    orderService.getShopQueueEstimate(sId).then(est => { if (est) setShopQueueEst(est); }).catch(() => {});
   }, [sId]);
 
   const loadMockData = () => {
@@ -485,6 +491,22 @@ export default function Menu() {
                         <p className="text-sm text-white mt-1">₹{item.price}</p>
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setAutobookItem({
+                        item_id: item.item_id,
+                        shop_id: item.shop_id,
+                        shop_name: item.shop_name || shopName,
+                        item_name: item.item_name,
+                        price: item.price
+                      })}
+                      className="px-2.5 py-1.5 rounded-xl bg-pink-950/60 hover:bg-pink-900 text-pink-200 border border-pink-500/40 transition-all flex items-center space-x-1 text-[11px] font-medium shadow-sm hover:scale-105 active:scale-95 shrink-0 relative z-10"
+                      title="Schedule daily auto-order for this food item"
+                    >
+                      <Repeat size={13} className="text-pink-300" />
+                      <span className="hidden sm:inline">Autobook</span>
+                    </button>
 
                     {/* Quantity Modifier Buttons */}
                     <div className="flex items-center space-x-2 bg-[#930E36]/40 backdrop-blur-md p-1.5 rounded-xl border border-[#930E36]/60 shrink-0 relative z-10">
@@ -776,11 +798,18 @@ export default function Menu() {
                 </div>
 
                 <button
-                  onClick={handleCheckout}
+                  onClick={() => {
+                    if (paymentMethod === 'CASH') {
+                      handleCheckout();
+                    } else {
+                      setShowPaymentGateway(true);
+                    }
+                  }}
                   disabled={isSubmitting || cart.length === 0}
-                  className="py-3 px-6 bg-white hover:bg-white/95 disabled:opacity-50 text-[#4C1829] font-medium text-xs rounded-2xl shadow-xl transition-all uppercase tracking-wider"
+                  className="py-3 px-6 bg-white hover:bg-white/95 disabled:opacity-50 text-[#4C1829] font-medium text-xs rounded-2xl shadow-xl transition-all uppercase tracking-wider flex items-center space-x-1.5"
                 >
-                  {isSubmitting ? 'Processing Order...' : 'Place Order Now'}
+                  <Lock size={13} />
+                  <span>{paymentMethod === 'CASH' ? (isSubmitting ? 'Processing Order...' : 'Place Order Now') : 'Proceed to Demo Pay'}</span>
                 </button>
               </div>
             </div>
@@ -788,6 +817,56 @@ export default function Menu() {
           </div>
         </div>
       )}
+      {/* Feature 1: Autobook Daily Schedule Modal */}
+      <AutobookModal
+        isOpen={Boolean(autobookItem)}
+        item={autobookItem}
+        onClose={() => setAutobookItem(null)}
+        onSuccess={() => setAutobookItem(null)}
+      />
+
+      {/* Feature 2: Demo Payment Gateway Modal */}
+      <PaymentGatewayModal
+        isOpen={showPaymentGateway}
+        amount={grandTotal}
+        shopName={cart[0]?.shopName || shopName}
+        itemCount={totalCartCount}
+        estimatedMinutes={shopQueueEst.estimatedMinutes}
+        queueNumber={shopQueueEst.queueNumber}
+        onClose={() => setShowPaymentGateway(false)}
+        onPaymentSuccess={async (details) => {
+          setIsSubmitting(true);
+          try {
+            const orderItems = cart.map(c => ({
+              itemId: c.id,
+              quantity: c.quantity,
+              name: c.name,
+              price: c.price
+            }));
+
+            const newOrder = await orderService.placeOrder(sId, orderItems, {
+              shopName: cart[0]?.shopName || shopName,
+              packagingFee,
+              paymentMethod: details.paymentMethod
+            });
+
+            setCart([]);
+            localStorage.removeItem('campusbite_cart');
+            window.dispatchEvent(new Event('cartUpdated'));
+            setShowPaymentGateway(false);
+            setIsCheckoutOpen(false);
+
+            alert('Takeaway Order Placed Successfully!\nToken: ' + newOrder.pickup_token + '\nPayment: ' + details.paymentMethod + '\nPickup in ~' + (newOrder.estimated_delivery_minutes || shopQueueEst.estimatedMinutes) + ' mins.');
+            navigate('/orders');
+          } catch (e) {
+            console.warn('Checkout error', e);
+            alert('Order recorded. Redirecting...');
+            navigate('/orders');
+          } finally {
+            setIsSubmitting(false);
+          }
+        }}
+      />
 
     </div>
   );

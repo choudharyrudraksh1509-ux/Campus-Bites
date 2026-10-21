@@ -80,6 +80,11 @@ interface Order {
   pickup_token?: string;
   customer_name?: string;
   customer_phone?: string;
+  isPreorder?: boolean;
+  pickupTime?: string | null;
+  queueNumber?: number;
+  estimatedMinutes?: number;
+  paymentMethod?: string;
   customer?: {
     id: number;
     fullName: string;
@@ -829,6 +834,11 @@ export default function StaffDashboard() {
                               {order.pickup_token || `TK-${1000 + (order.id % 9000)}`}
                             </span>
                             {getStatusBadge(order.status)}
+                            {order.isPreorder && (
+                              <span className="font-mono text-xs px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                                📅 PREORDER: {order.pickupTime}
+                              </span>
+                            )}
                           </div>
                           
                           <p className="text-xs text-white/60 mt-2 flex items-center">
@@ -1045,6 +1055,11 @@ export default function StaffDashboard() {
                           </td>
                           <td className="px-5 py-4 text-center">
                             {getStatusBadge(order.status)}
+                            {order.isPreorder && (
+                              <span className="font-mono text-xs px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                                📅 PREORDER: {order.pickupTime}
+                              </span>
+                            )}
                           </td>
                           <td className="px-5 py-4 text-right text-white/40 font-mono">
                             <div>{new Date(order.orderTime).toLocaleDateString()}</div>

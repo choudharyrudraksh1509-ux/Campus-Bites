@@ -20,6 +20,19 @@ export interface Order {
   pickup_token: string;
   created_at: string;
   order_time?: string;
+  // Features: Preorder, Queue & Estimated Delivery Time, Payment Gateway
+  is_preorder?: boolean;
+  isPreorder?: boolean;
+  pickup_time?: string | null;
+  pickupTime?: string | null;
+  queue_number?: number;
+  queueNumber?: number;
+  prep_time_minutes?: number;
+  estimated_delivery_minutes?: number;
+  estimatedMinutes?: number;
+  estimated_ready_time?: string;
+  payment_method?: string;
+  paymentMethod?: string;
 }
 
 export interface PlaceOrderItem {
@@ -119,6 +132,17 @@ export const KNOWN_MENU_ITEMS: Record<number, { name: string; price: number }> =
   903: { name: 'Veg Dum Biryani', price: 130 },
 };
 
+export const getItemPrepTime = (itemId: number, name?: string): number => {
+  const n = (name || '').toLowerCase();
+  if (n.includes('tea') || n.includes('coffee') || n.includes('sarbath') || n.includes('buttermilk') || n.includes('chai') || n.includes('badam')) return 4;
+  if (n.includes('juice') || n.includes('milkshake')) return 6;
+  if (n.includes('idli') || n.includes('samosa') || n.includes('cutlet') || n.includes('sundal') || n.includes('paniyaram') || n.includes('vadai') || n.includes('bajji') || n.includes('poori') || n.includes('chaat') || n.includes('vada')) return 7;
+  if (n.includes('maggi') || n.includes('puff') || n.includes('fries') || n.includes('pops') || n.includes('potato')) return 8;
+  if (n.includes('burger') || n.includes('sandwich') || n.includes('dosa') || n.includes('roll') || n.includes('paratha') || n.includes('bhature') || n.includes('wings')) return 12;
+  if (n.includes('pizza') || n.includes('shawarma') || n.includes('biryani') || n.includes('combo') || n.includes('naan')) return 15;
+  return 10;
+};
+
 export function normalizeOrderItem(i: any): OrderItem {
   const rawId = Number(i.itemId || i.id || i.item_id || 0);
   const known = KNOWN_MENU_ITEMS[rawId];
@@ -169,6 +193,9 @@ export const orderService = {
       const mappedApiOrders: Order[] = apiOrders.map((o: any) => {
         const items = Array.isArray(o.items) ? o.items.map(normalizeOrderItem) : [];
         const itemsTotal = items.reduce((sum: number, item: OrderItem) => sum + (item.price * item.quantity), 0);
+        const estMinutes = o.estimated_delivery_minutes || o.estimatedMinutes || 15;
+        const estReady = o.estimated_ready_time || (o.order_time ? new Date(new Date(o.order_time).getTime() + estMinutes * 60 * 1000).toISOString() : undefined);
+
         return {
           order_id: Number(o.order_id || o.id),
           id: Number(o.id || o.order_id),
@@ -181,7 +208,13 @@ export const orderService = {
           created_at: o.order_time
             ? new Date(o.order_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : 'Recent',
-          order_time: o.order_time
+          order_time: o.order_time,
+          is_preorder: Boolean(o.is_preorder ?? o.isPreorder),
+          pickup_time: o.pickup_time || o.pickupTime || null,
+          queue_number: o.queue_number || o.queueNumber || 1,
+          estimated_delivery_minutes: estMinutes,
+          estimated_ready_time: estReady,
+          payment_method: o.payment_method || o.paymentMethod || 'ONLINE_DEMO'
         };
       });
 
@@ -213,6 +246,52 @@ export const orderService = {
   },
 
   /**
+   * Get queue and estimated delivery time preview for a shop
+   */
+  async getShopQueueEstimate(shopId: number): Promise<{
+    queueNumber: number;
+    activeOrdersCount: number;
+    basePrepMinutes: number;
+    estimatedMinutes: number;
+    estimatedReadyTime: string;
+  }> {
+    try {
+      const res = await api.get(`/orders/queue-estimate/${shopId}`);
+      if (res.data && res.data.queueNumber) {
+        return res.data;
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const orders = await this.getOrders();
+      const activeAtShop = orders.filter(o => 
+        Number(o.shop_id) === Number(shopId) &&
+        ['PLACED', 'PREPARING'].includes(o.status)
+      ).length;
+      const basePrep = 10;
+      const wait = activeAtShop * 3;
+      const total = basePrep + wait;
+      return {
+        queueNumber: activeAtShop + 1,
+        activeOrdersCount: activeAtShop,
+        basePrepMinutes: basePrep,
+        estimatedMinutes: total,
+        estimatedReadyTime: new Date(Date.now() + total * 60 * 1000).toISOString()
+      };
+    } catch {
+      return {
+        queueNumber: 1,
+        activeOrdersCount: 0,
+        basePrepMinutes: 10,
+        estimatedMinutes: 10,
+        estimatedReadyTime: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      };
+    }
+  },
+
+  /**
    * Place an order: communicates with backend API and ensures fallback sync in localStorage
    */
   async placeOrder(
@@ -221,6 +300,9 @@ export const orderService = {
     metadata?: {
       shopName?: string;
       packagingFee?: number;
+      isPreorder?: boolean;
+      pickupTime?: string;
+      paymentMethod?: string;
     }
   ): Promise<Order> {
     const token = localStorage.getItem('token');
@@ -232,6 +314,29 @@ export const orderService = {
     let pickupToken = `TK-${Math.floor(1000 + Math.random() * 9000)}`;
     let finalStatus = 'PLACED';
 
+    // Calculate queue & prep time
+    let maxPrepTime = 8;
+    for (const item of items) {
+      const p = getItemPrepTime(item.itemId, item.name);
+      if (p > maxPrepTime) maxPrepTime = p;
+    }
+
+    let existingOrders: Order[] = [];
+    try {
+      const raw = localStorage.getItem('campusbite_orders');
+      if (raw) existingOrders = JSON.parse(raw);
+    } catch {}
+
+    const activeAtShop = existingOrders.filter(o => 
+      Number(o.shop_id) === Number(shopId) &&
+      ['PLACED', 'PREPARING'].includes(o.status)
+    ).length;
+
+    let queueNumber = activeAtShop + 1;
+    let estimatedMinutes = maxPrepTime + (activeAtShop * 3);
+    const orderTimeIso = new Date().toISOString();
+    let estimatedReadyTime = new Date(Date.now() + estimatedMinutes * 60 * 1000).toISOString();
+
     if (token && token !== 'undefined') {
       try {
         const payload = {
@@ -241,7 +346,10 @@ export const orderService = {
             quantity: Number(i.quantity),
             name: i.name,
             price: i.price
-          }))
+          })),
+          isPreorder: Boolean(metadata?.isPreorder),
+          pickupTime: metadata?.pickupTime || undefined,
+          paymentMethod: metadata?.paymentMethod || 'ONLINE_DEMO'
         };
 
         const res = await api.post('/orders', payload);
@@ -249,6 +357,15 @@ export const orderService = {
           orderId = Number(res.data.orderId || res.data.id);
           if (res.data.pickup_token) {
             pickupToken = res.data.pickup_token;
+          }
+          if (res.data.queue_number) {
+            queueNumber = res.data.queue_number;
+          }
+          if (res.data.estimated_delivery_minutes) {
+            estimatedMinutes = res.data.estimated_delivery_minutes;
+          }
+          if (res.data.estimated_ready_time) {
+            estimatedReadyTime = res.data.estimated_ready_time;
           }
 
           // Move order from PAYMENT_PENDING to PLACED
@@ -279,7 +396,14 @@ export const orderService = {
       status: finalStatus,
       pickup_token: pickupToken,
       created_at: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      order_time: new Date().toISOString()
+      order_time: orderTimeIso,
+      is_preorder: Boolean(metadata?.isPreorder),
+      pickup_time: metadata?.pickupTime || null,
+      queue_number: queueNumber,
+      prep_time_minutes: maxPrepTime,
+      estimated_delivery_minutes: estimatedMinutes,
+      estimated_ready_time: estimatedReadyTime,
+      payment_method: metadata?.paymentMethod || 'ONLINE_DEMO'
     };
 
     // Immediate save into localStorage
@@ -336,10 +460,12 @@ export const orderService = {
       const res = await api.get(`/orders/${orderId}`);
       if (res.data) {
         const o = res.data.order || res.data;
+        const estMinutes = o.estimated_delivery_minutes || o.estimatedMinutes || 15;
         return {
           order_id: Number(o.order_id || o.id),
           id: Number(o.id || o.order_id),
           shop_name: o.shop_name || 'Campus Outlet',
+          shop_id: o.shop_id || o.shopId,
           items: Array.isArray(res.data.items) ? res.data.items.map(normalizeOrderItem) : [],
           total_amount: Number(o.total_amount || 0),
           status: o.status || 'PLACED',
@@ -347,7 +473,13 @@ export const orderService = {
           created_at: o.order_time
             ? new Date(o.order_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : 'Recent',
-          order_time: o.order_time
+          order_time: o.order_time,
+          is_preorder: Boolean(o.is_preorder ?? o.isPreorder),
+          pickup_time: o.pickup_time || o.pickupTime || null,
+          queue_number: o.queue_number || o.queueNumber || 1,
+          estimated_delivery_minutes: estMinutes,
+          estimated_ready_time: o.estimated_ready_time,
+          payment_method: o.payment_method || o.paymentMethod || 'ONLINE_DEMO'
         };
       }
     } catch {

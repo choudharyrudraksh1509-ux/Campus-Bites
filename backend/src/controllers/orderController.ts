@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../db/prisma';
 
-const BACKEND_KNOWN_ITEMS: Record<number, { name: string; price: number }> = {
+export const BACKEND_KNOWN_ITEMS: Record<number, { name: string; price: number }> = {
     101: { name: 'Crispy Veg Cheese Burger', price: 85 },
     102: { name: 'Paneer Loaded Fries', price: 95 },
     103: { name: 'Double Cheese Pizza', price: 150 },
@@ -79,8 +79,19 @@ const BACKEND_KNOWN_ITEMS: Record<number, { name: string; price: number }> = {
     903: { name: 'Veg Dum Biryani', price: 130 },
 };
 
+export const getItemPrepTime = (itemId: number, name?: string): number => {
+    const n = (name || '').toLowerCase();
+    if (n.includes('tea') || n.includes('coffee') || n.includes('sarbath') || n.includes('buttermilk') || n.includes('chai') || n.includes('badam')) return 4;
+    if (n.includes('juice') || n.includes('milkshake')) return 6;
+    if (n.includes('idli') || n.includes('samosa') || n.includes('cutlet') || n.includes('sundal') || n.includes('paniyaram') || n.includes('vadai') || n.includes('bajji') || n.includes('poori') || n.includes('chaat') || n.includes('vada')) return 7;
+    if (n.includes('maggi') || n.includes('puff') || n.includes('fries') || n.includes('pops') || n.includes('potato')) return 8;
+    if (n.includes('burger') || n.includes('sandwich') || n.includes('dosa') || n.includes('roll') || n.includes('paratha') || n.includes('bhature') || n.includes('wings')) return 12;
+    if (n.includes('pizza') || n.includes('shawarma') || n.includes('biryani') || n.includes('combo') || n.includes('naan')) return 15;
+    return 10;
+};
+
 export const placeOrder = async (req: AuthRequest, res: Response): Promise<void> => {
-    const { shopId, items } = req.body;
+    const { shopId, items, isPreorder, pickupTime, paymentMethod } = req.body;
     const userId = req.user?.userId;
 
     if (!userId) {
@@ -135,6 +146,7 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
 
             let totalAmount = 0;
             const orderItemsData = [];
+            let maxPrepTime = 8;
 
             for (const item of items) {
                 const itemIdNum = Number(item.itemId);
@@ -183,7 +195,21 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
                     quantity: qty,
                     priceAtOrder: itemPrice
                 });
+
+                const curItemPrep = getItemPrepTime(food.id, food.name);
+                if (curItemPrep > maxPrepTime) maxPrepTime = curItemPrep;
             }
+
+            // Calculate live queue for this shop
+            const activeOrdersCount = await tx.order.count({
+                where: {
+                    shopId: shop.id,
+                    status: { in: ['PLACED', 'PREPARING'] }
+                }
+            });
+            const queueNumber = activeOrdersCount + 1;
+            const queueWaitMinutes = activeOrdersCount * 3;
+            const estimatedMinutes = maxPrepTime + queueWaitMinutes;
 
             const newOrder = await tx.order.create({
                 data: {
@@ -191,6 +217,11 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
                     shopId: shop.id,
                     status: 'PLACED',
                     totalAmount,
+                    isPreorder: Boolean(isPreorder),
+                    pickupTime: pickupTime || null,
+                    estimatedMinutes,
+                    queueNumber,
+                    paymentMethod: paymentMethod || 'ONLINE_DEMO',
                     items: {
                         create: orderItemsData
                     },
@@ -206,29 +237,46 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
                 }
             });
 
-            return newOrder;
+            return { newOrder, maxPrepTime };
         });
 
-        const pickupToken = `TK-${1000 + (order.id % 9000)}`;
+        const createdOrder = order.newOrder;
+        const pickupToken = `TK-${1000 + (createdOrder.id % 9000)}`;
+        const estMinutes = createdOrder.estimatedMinutes || 15;
+        const estimatedReadyTime = new Date(createdOrder.orderTime.getTime() + estMinutes * 60 * 1000).toISOString();
 
         res.status(201).json({
             message: 'Order placed',
-            orderId: order.id,
-            id: order.id,
-            totalAmount: order.totalAmount,
-            total_amount: order.totalAmount,
+            orderId: createdOrder.id,
+            id: createdOrder.id,
+            totalAmount: createdOrder.totalAmount,
+            total_amount: createdOrder.totalAmount,
             pickup_token: pickupToken,
+            queue_number: createdOrder.queueNumber || 1,
+            prep_time_minutes: order.maxPrepTime,
+            estimated_delivery_minutes: estMinutes,
+            estimated_ready_time: estimatedReadyTime,
+            is_preorder: createdOrder.isPreorder,
+            pickup_time: createdOrder.pickupTime,
+            payment_method: createdOrder.paymentMethod,
             order: {
-                id: order.id,
-                order_id: order.id,
-                shop_id: order.shopId,
-                shop_name: order.shop?.name || 'Campus Outlet',
-                status: order.status,
-                total_amount: order.totalAmount,
-                order_time: order.orderTime,
-                created_at: order.orderTime,
+                id: createdOrder.id,
+                order_id: createdOrder.id,
+                shop_id: createdOrder.shopId,
+                shop_name: createdOrder.shop?.name || 'Campus Outlet',
+                status: createdOrder.status,
+                total_amount: createdOrder.totalAmount,
+                order_time: createdOrder.orderTime,
+                created_at: createdOrder.orderTime,
                 pickup_token: pickupToken,
-                items: order.items.map(oi => ({
+                queue_number: createdOrder.queueNumber || 1,
+                prep_time_minutes: order.maxPrepTime,
+                estimated_delivery_minutes: estMinutes,
+                estimated_ready_time: estimatedReadyTime,
+                is_preorder: createdOrder.isPreorder,
+                pickup_time: createdOrder.pickupTime,
+                payment_method: createdOrder.paymentMethod,
+                items: createdOrder.items.map(oi => ({
                     id: oi.itemId,
                     itemId: oi.itemId,
                     name: oi.item?.name || 'Food Item',
@@ -253,26 +301,36 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
             orderBy: { orderTime: 'desc' }
         });
         
-        const mapped = orders.map(o => ({
-            id: o.id,
-            order_id: o.id,
-            shop_id: o.shopId,
-            shop_name: o.shop?.name || 'Campus Outlet',
-            status: o.status,
-            total_amount: o.totalAmount,
-            totalAmount: o.totalAmount,
-            order_time: o.orderTime,
-            created_at: o.orderTime,
-            pickup_token: `TK-${1000 + (o.id % 9000)}`,
-            items: o.items.map(oi => ({
-                id: oi.itemId,
-                itemId: oi.itemId,
-                name: oi.item?.name || 'Food Item',
-                quantity: oi.quantity,
-                price: oi.priceAtOrder,
-                price_at_order: oi.priceAtOrder
-            }))
-        }));
+        const mapped = orders.map(o => {
+            const estMinutes = o.estimatedMinutes || 15;
+            const estimatedReadyTime = new Date(new Date(o.orderTime).getTime() + estMinutes * 60 * 1000).toISOString();
+            return {
+                id: o.id,
+                order_id: o.id,
+                shop_id: o.shopId,
+                shop_name: o.shop?.name || 'Campus Outlet',
+                status: o.status,
+                total_amount: o.totalAmount,
+                totalAmount: o.totalAmount,
+                order_time: o.orderTime,
+                created_at: o.orderTime,
+                pickup_token: `TK-${1000 + (o.id % 9000)}`,
+                queue_number: o.queueNumber || 1,
+                estimated_delivery_minutes: estMinutes,
+                estimated_ready_time: estimatedReadyTime,
+                is_preorder: o.isPreorder || false,
+                pickup_time: o.pickupTime || null,
+                payment_method: o.paymentMethod || 'ONLINE_DEMO',
+                items: o.items.map(oi => ({
+                    id: oi.itemId,
+                    itemId: oi.itemId,
+                    name: oi.item?.name || 'Food Item',
+                    quantity: oi.quantity,
+                    price: oi.priceAtOrder,
+                    price_at_order: oi.priceAtOrder
+                }))
+            };
+        });
         res.json(mapped);
     } catch (error: any) {
         res.status(500).json({ error: error.message || 'Failed to fetch orders' });
@@ -298,6 +356,8 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
         }
 
         const pickupToken = `TK-${1000 + (order.id % 9000)}`;
+        const estMinutes = order.estimatedMinutes || 15;
+        const estimatedReadyTime = new Date(new Date(order.orderTime).getTime() + estMinutes * 60 * 1000).toISOString();
 
         res.json({
             id: order.id,
@@ -310,6 +370,12 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
             order_time: order.orderTime,
             created_at: order.orderTime,
             pickup_token: pickupToken,
+            queue_number: order.queueNumber || 1,
+            estimated_delivery_minutes: estMinutes,
+            estimated_ready_time: estimatedReadyTime,
+            is_preorder: order.isPreorder || false,
+            pickup_time: order.pickupTime || null,
+            payment_method: order.paymentMethod || 'ONLINE_DEMO',
             order: {
                 id: order.id,
                 order_id: order.id,
@@ -317,7 +383,13 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
                 status: order.status,
                 total_amount: order.totalAmount,
                 order_time: order.orderTime,
-                pickup_token: pickupToken
+                pickup_token: pickupToken,
+                queue_number: order.queueNumber || 1,
+                estimated_delivery_minutes: estMinutes,
+                estimated_ready_time: estimatedReadyTime,
+                is_preorder: order.isPreorder || false,
+                pickup_time: order.pickupTime || null,
+                payment_method: order.paymentMethod || 'ONLINE_DEMO'
             },
             items: order.items.map(oi => ({
                 id: oi.itemId,
@@ -396,7 +468,7 @@ export const confirmPayment = async (req: AuthRequest, res: Response): Promise<v
             return;
         }
 
-        // Simulate payment confirmation — in prod this would verify with a gateway
+        // Simulate payment confirmation
         await prisma.$transaction(async (tx) => {
             const payment = await tx.paymentAttempt.findFirst({
                 where: { orderId: oId, status: 'PENDING' }
@@ -426,5 +498,152 @@ export const confirmPayment = async (req: AuthRequest, res: Response): Promise<v
         res.json({ message: 'Payment confirmed. Order is now PLACED.', orderId: oId, status: 'PLACED' });
     } catch (error: any) {
         res.status(500).json({ error: error.message || 'Failed to confirm payment' });
+    }
+};
+
+// ==========================================
+// LIVE QUEUE & TIME ESTIMATE ENDPOINT
+// ==========================================
+export const getShopQueueEstimate = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const shopId = Number(req.params.shopId);
+        const activeOrdersCount = await prisma.order.count({
+            where: {
+                shopId,
+                status: { in: ['PLACED', 'PREPARING'] }
+            }
+        });
+        const queueNumber = activeOrdersCount + 1;
+        const basePrepMinutes = 10;
+        const queueDelayMinutes = activeOrdersCount * 3;
+        const estimatedMinutes = basePrepMinutes + queueDelayMinutes;
+        const estimatedReadyTime = new Date(Date.now() + estimatedMinutes * 60 * 1000).toISOString();
+
+        res.json({
+            shopId,
+            activeOrdersCount,
+            queueNumber,
+            basePrepMinutes,
+            queueDelayMinutes,
+            estimatedMinutes,
+            estimatedReadyTime
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to fetch queue estimate' });
+    }
+};
+
+// ==========================================
+// DAILY AUTOBOOK SCHEDULES CONTROLLERS
+// ==========================================
+export const getAutobookSchedules = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const schedules = await prisma.autobookSchedule.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        const shops = await prisma.shop.findMany();
+        const items = await prisma.foodItem.findMany();
+
+        const shopMap = new Map(shops.map(s => [s.id, s.name]));
+        const itemMap = new Map(items.map(i => [i.id, i]));
+
+        const enriched = schedules.map(s => {
+            const item = itemMap.get(s.itemId);
+            const known = BACKEND_KNOWN_ITEMS[s.itemId];
+            const itemName = item?.name || known?.name || `Food Item #${s.itemId}`;
+            const itemPrice = item?.price || known?.price || 50;
+            return {
+                id: s.id,
+                userId: s.userId,
+                shopId: s.shopId,
+                shopName: shopMap.get(s.shopId) || `Campus Outlet #${s.shopId}`,
+                itemId: s.itemId,
+                itemName,
+                price: itemPrice,
+                quantity: s.quantity,
+                scheduledTime: s.scheduledTime,
+                isActive: s.isActive,
+                lastRunDate: s.lastRunDate,
+                createdAt: s.createdAt
+            };
+        });
+
+        res.json(enriched);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to fetch autobook schedules' });
+    }
+};
+
+export const createAutobookSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const { shopId, itemId, quantity, scheduledTime, isActive } = req.body;
+
+        const schedule = await prisma.autobookSchedule.create({
+            data: {
+                userId,
+                shopId: Number(shopId),
+                itemId: Number(itemId),
+                quantity: Number(quantity) || 1,
+                scheduledTime: String(scheduledTime),
+                isActive: isActive !== undefined ? Boolean(isActive) : true
+            }
+        });
+
+        res.status(201).json({
+            message: 'Daily autobook schedule registered successfully',
+            schedule
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to create autobook schedule' });
+    }
+};
+
+export const toggleAutobookSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const scheduleId = Number(req.params.scheduleId);
+        const existing = await prisma.autobookSchedule.findFirst({
+            where: { id: scheduleId, userId }
+        });
+
+        if (!existing) {
+            res.status(404).json({ error: 'Schedule not found' });
+            return;
+        }
+
+        const updated = await prisma.autobookSchedule.update({
+            where: { id: scheduleId },
+            data: { isActive: !existing.isActive }
+        });
+
+        res.json({ message: 'Autobook schedule status updated', schedule: updated });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to toggle autobook schedule' });
+    }
+};
+
+export const deleteAutobookSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const scheduleId = Number(req.params.scheduleId);
+        await prisma.autobookSchedule.deleteMany({
+            where: { id: scheduleId, userId }
+        });
+
+        res.json({ message: 'Autobook schedule removed' });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to delete autobook schedule' });
     }
 };

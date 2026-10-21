@@ -54,6 +54,20 @@ export const placeOrderSchema = z.object({
       quantity: z.union([z.number(), z.string().transform(v => Number(v))]),
       name: z.string().optional(),
       price: z.number().optional()
-    })).min(1)
+    })).min(1),
+    isPreorder: z.boolean().optional(),
+    pickupTime: z.string().optional(),
+    paymentMethod: z.string().optional(),
+    notes: z.string().optional()
+  })
+});
+
+export const autobookScheduleSchema = z.object({
+  body: z.object({
+    shopId: z.union([z.number(), z.string().transform(v => Number(v))]),
+    itemId: z.union([z.number(), z.string().transform(v => Number(v))]),
+    quantity: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(1),
+    scheduledTime: z.string().min(1, 'Scheduled daily time is required'),
+    isActive: z.boolean().optional().default(true)
   })
 });

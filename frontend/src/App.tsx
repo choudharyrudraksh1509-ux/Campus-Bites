@@ -9,6 +9,7 @@ import Orders from './pages/Orders';
 import StaffDashboard from './pages/StaffDashboard';
 import Login from './pages/Login';
 import api from './services/api';
+import autobookService from './services/autobookService';
 
 function App() {
 
@@ -43,6 +44,28 @@ function App() {
     const interval = setInterval(updateCount, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Automated background runner for daily recurring autobook orders
+  useEffect(() => {
+    if (!user || user.role === 'STAFF') return;
+
+    const checkSchedules = async () => {
+      try {
+        const triggered = await autobookService.checkAndRunDueSchedules();
+        if (triggered.length > 0) {
+          triggered.forEach(t => {
+            alert(`⚡ Daily Autobook Triggered!\nYour scheduled daily order for ${t.quantity}x ${t.itemName} at ${t.shopName} has been automatically placed!`);
+          });
+        }
+      } catch (err) {
+        console.error('Error running autobook scheduler', err);
+      }
+    };
+
+    checkSchedules();
+    const interval = setInterval(checkSchedules, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Fetch logged in user on mount
   useEffect(() => {
