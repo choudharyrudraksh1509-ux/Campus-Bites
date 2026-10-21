@@ -25,6 +25,9 @@ export interface CartItem {
   shopName: string;
   quantity: number;
   price: number;
+  originalPrice?: number;
+  isDynamicPricing?: boolean;
+  discountPercent?: number;
   name: string;
 }
 
@@ -382,7 +385,18 @@ export default function CartModal({ isOpen, onClose, onCartChange }: CartModalPr
                       <div className="space-y-0.5 max-w-[50%]">
                         <div className="font-medium text-white truncate text-sm">{item.name}</div>
                         <div className="text-[11px] text-white/70">
-                          ₹{item.price} each • <span className="text-white font-medium">₹{item.price * item.quantity}</span>
+                          {item.isDynamicPricing && item.originalPrice && item.originalPrice > item.price ? (
+                            <span className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-emerald-400 font-bold">₹{item.price} each</span>
+                              <span className="text-white/40 line-through">₹{item.originalPrice}</span>
+                              <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30 px-1 py-0.5 rounded-full font-bold">
+                                🔥 {item.discountPercent || Math.round((1 - item.price / item.originalPrice) * 100)}% OFF
+                              </span>
+                              <span className="text-white font-medium">= ₹{item.price * item.quantity}</span>
+                            </span>
+                          ) : (
+                            <>₹{item.price} each • <span className="text-white font-medium">₹{item.price * item.quantity}</span></>
+                          )}
                         </div>
                       </div>
 

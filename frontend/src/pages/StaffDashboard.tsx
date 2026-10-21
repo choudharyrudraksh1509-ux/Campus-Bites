@@ -805,23 +805,23 @@ export default function StaffDashboard() {
         
         {/* Header Bar */}
         <div className="border-b border-white/5 p-4 sm:p-5 flex justify-between items-center bg-white/[0.02]">
-          <div className="flex items-center space-x-2">
-            <h2 className="text-sm font-bold tracking-wider uppercase text-white">
+          <div className="flex items-center space-x-2 min-w-0">
+            <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase text-white whitespace-nowrap shrink-0">
               {activeTab === 'orders' && 'Live Kitchen Orders'}
-              {activeTab === 'history' && 'Past Completed Orders'}
-              {activeTab === 'menu' && 'Stall Menu Items'}
-              {activeTab === 'profile' && 'Stall & Staff Settings'}
+              {activeTab === 'history' && 'Past Orders'}
+              {activeTab === 'menu' && 'Stall Menu'}
+              {activeTab === 'profile' && 'Settings'}
             </h2>
-            <span className="text-xs text-white/30">•</span>
-            <span className="text-xs text-[#FF004B] font-semibold">
+            <span className="text-xs text-white/30 shrink-0">•</span>
+            <span className="text-xs text-[#FF004B] font-semibold whitespace-nowrap truncate">
               {stallInfo?.name || currentUser?.shopName || 'Your Stall'}
             </span>
           </div>
 
           <div className="flex items-center space-x-2">
             {activeTab === 'orders' && (
-              <span className="inline-flex items-center text-[10px] text-white/40 font-mono bg-white/5 px-2.5 py-1 rounded-lg">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
+              <span className="inline-flex items-center whitespace-nowrap text-[10px] text-white/40 font-mono bg-white/5 px-2.5 py-1 rounded-lg shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse shrink-0" />
                 Live Sync Active
               </span>
             )}

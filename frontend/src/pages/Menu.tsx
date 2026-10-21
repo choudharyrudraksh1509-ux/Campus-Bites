@@ -201,7 +201,17 @@ export default function Menu() {
   const [loading, setLoading] = useState(true);
   
   // Cart state stored per outlet
-  const [cart, setCart] = useState<{ id: number; shopId: number; shopName: string; quantity: number; price: number; name: string }[]>(() => {
+  const [cart, setCart] = useState<{
+    id: number;
+    shopId: number;
+    shopName: string;
+    quantity: number;
+    price: number;
+    originalPrice?: number;
+    isDynamicPricing?: boolean;
+    discountPercent?: number;
+    name: string;
+  }[]>(() => {
     const saved = localStorage.getItem('campusbite_cart');
     return saved ? JSON.parse(saved) : [];
   });
@@ -316,7 +326,17 @@ export default function Menu() {
         return prev.map(c => c.id === item.item_id ? { ...c, quantity: newQ } : c);
       }
       if (delta > 0) {
-        return [...prev, { id: item.item_id, shopId: item.shop_id, shopName: item.shop_name || shopName, quantity: 1, price: item.price, name: item.item_name }];
+        return [...prev, {
+          id: item.item_id,
+          shopId: item.shop_id,
+          shopName: item.shop_name || shopName,
+          quantity: 1,
+          price: item.price,
+          originalPrice: item.originalPrice,
+          isDynamicPricing: item.isDynamicPricing,
+          discountPercent: item.discountPercent,
+          name: item.item_name
+        }];
       }
       return prev;
     });
@@ -324,7 +344,17 @@ export default function Menu() {
 
   const handleConfirmClearAndSwitch = () => {
     if (pendingItem) {
-      setCart([{ id: pendingItem.item_id, shopId: pendingItem.shop_id, shopName: pendingItem.shop_name || shopName, quantity: 1, price: pendingItem.price, name: pendingItem.item_name }]);
+      setCart([{
+        id: pendingItem.item_id,
+        shopId: pendingItem.shop_id,
+        shopName: pendingItem.shop_name || shopName,
+        quantity: 1,
+        price: pendingItem.price,
+        originalPrice: pendingItem.originalPrice,
+        isDynamicPricing: pendingItem.isDynamicPricing,
+        discountPercent: pendingItem.discountPercent,
+        name: pendingItem.item_name
+      }]);
       setPendingItem(null);
     }
     setConflictShopName('');
@@ -441,6 +471,17 @@ export default function Menu() {
           </span>
         </div>
       </div>
+
+      {/* Closing Clearance Sale Banner */}
+      {isClosingSoon && closingDiscount > 0 && (
+        <div className="flex items-center gap-3 bg-gradient-to-r from-red-900/60 to-orange-900/40 border border-red-500/50 rounded-2xl px-4 py-3 shadow-lg">
+          <span className="text-xl shrink-0">🔥</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-red-300">Closing Clearance Sale — {closingDiscount}% OFF!</p>
+            <p className="text-xs text-white/60 mt-0.5">This stall is closing soon. Discounted prices are live on marked items — grab them before they're gone!</p>
+          </div>
+        </div>
+      )}
 
       {/* Search & Category Filter Navigation */}
       <div className="space-y-4">

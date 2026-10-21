@@ -188,9 +188,6 @@ export default function ReviewsModal({
         }}
         className="bg-[#4C1829] text-white w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-3xl p-0 sm:p-2 shadow-none sm:shadow-[0_30px_70px_rgba(0,0,0,0.95)] border-0 sm:border border-[#930E36] relative overflow-hidden flex flex-col"
       >
-        {/* Subtle patterned overlay */}
-        <div className="absolute inset-0 bg-small-dots opacity-20 pointer-events-none mix-blend-overlay"></div>
-
         {/* Modal Top Header */}
         <div className="relative z-10 p-5 sm:p-6 border-b border-[#930E36]/60 flex items-start justify-between gap-4">
           <div>
