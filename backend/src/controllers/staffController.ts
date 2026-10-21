@@ -537,7 +537,8 @@ export const toggleClosingClearance = async (req: AuthRequest, res: Response): P
                 if (onlySurplus) {
                     const match = (item.description || '').match(/\[Qty:\s*(\d+)\]/i);
                     const qty = match ? parseInt(match[1], 10) : 0;
-                    hasSurplus = qty > 0;
+                    // If description doesn't explicitly mark a quantity limit, treat it as general surplus stock
+                    hasSurplus = match ? qty > 0 : true;
                 }
 
                 if (hasSurplus) {
@@ -557,7 +558,7 @@ export const toggleClosingClearance = async (req: AuthRequest, res: Response): P
             }
 
             res.json({
-                message: `Closing clearance sale active: ${closingDiscount}% discount applied to surplus items`,
+                message: `Closing clearance sale active: ${closingDiscount}% discount applied to items`,
                 isClosingSoon: true,
                 closingDiscount
             });

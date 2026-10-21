@@ -265,21 +265,38 @@ export default function Menu() {
           setIsClosingSoon(Boolean(first?.isClosingSoon));
           setClosingDiscount(first?.closingDiscount || 0);
 
-          setMenu(res.data.map((item: any) => ({
-            item_id: item.id || item.item_id,
-            shop_id: item.shopId || item.shop_id || sId,
-            shop_name: item.shop?.name || item.shop_name || 'Outlet',
-            item_name: item.name || item.item_name,
-            category_name: item.category?.name || item.category_name || 'General',
-            price: Number(item.price),
-            originalPrice: item.originalPrice ? Number(item.originalPrice) : Number(item.price),
-            discountPercent: item.discountPercent ? Number(item.discountPercent) : 0,
-            isDynamicPricing: Boolean(item.isDynamicPricing),
-            isClosingSoon: Boolean(item.isClosingSoon),
-            closingDiscount: item.closingDiscount || 0,
-            quantityAvailable: item.quantityAvailable,
-            is_veg: item.is_veg !== undefined ? item.is_veg : !item.name.toLowerCase().includes('chicken') && !item.name.toLowerCase().includes('egg')
-          })));
+          setMenu(res.data.map((item: any) => {
+            const closingDisc = item.closingDiscount || first?.closingDiscount || 0;
+            const shopIsClosing = Boolean(item.isClosingSoon || first?.isClosingSoon);
+            const isDyn = Boolean(item.isDynamicPricing) || (shopIsClosing && closingDisc > 0);
+            const origPrice = item.originalPrice ? Number(item.originalPrice) : Number(item.price);
+            let finalPrice = Number(item.price);
+            let discPct = item.discountPercent ? Number(item.discountPercent) : 0;
+
+            if (isDyn && (!discPct || discPct === 0) && shopIsClosing && closingDisc > 0) {
+              discPct = closingDisc;
+            }
+
+            if (isDyn && discPct > 0 && finalPrice >= origPrice) {
+              finalPrice = Math.max(5, Math.round(origPrice * (1 - discPct / 100)));
+            }
+
+            return {
+              item_id: item.id || item.item_id,
+              shop_id: item.shopId || item.shop_id || sId,
+              shop_name: item.shop?.name || item.shop_name || 'Outlet',
+              item_name: item.name || item.item_name,
+              category_name: item.category?.name || item.category_name || 'General',
+              price: finalPrice,
+              originalPrice: origPrice,
+              discountPercent: discPct,
+              isDynamicPricing: isDyn,
+              isClosingSoon: shopIsClosing,
+              closingDiscount: closingDisc,
+              quantityAvailable: item.quantityAvailable,
+              is_veg: item.is_veg !== undefined ? item.is_veg : !item.name.toLowerCase().includes('chicken') && !item.name.toLowerCase().includes('egg')
+            };
+          }));
           setShopName(res.data[0]?.shop?.name || FULL_MOCK_MENUS[sId]?.shop_name || 'Campus Outlet');
         } else {
           loadMockData();
@@ -293,8 +310,26 @@ export default function Menu() {
     api.get(`/shops/${sId}`)
       .then(res => {
         if (res.data) {
-          if (res.data.isClosingSoon !== undefined) setIsClosingSoon(Boolean(res.data.isClosingSoon));
-          if (res.data.closingDiscount) setClosingDiscount(res.data.closingDiscount);
+          const closing = Boolean(res.data.isClosingSoon);
+          const discount = res.data.closingDiscount || 0;
+          if (res.data.isClosingSoon !== undefined) setIsClosingSoon(closing);
+          if (res.data.closingDiscount) setClosingDiscount(discount);
+
+          if (closing && discount > 0) {
+            setMenu(prev => prev.map(m => {
+              const orig = m.originalPrice || m.price;
+              const discPrice = Math.max(5, Math.round(orig * (1 - discount / 100)));
+              return {
+                ...m,
+                originalPrice: orig,
+                price: discPrice,
+                discountPercent: discount,
+                isDynamicPricing: true,
+                isClosingSoon: true,
+                closingDiscount: discount
+              };
+            }));
+          }
         }
       })
       .catch(() => {});
@@ -303,7 +338,12 @@ export default function Menu() {
 
   const loadMockData = () => {
     const mock = FULL_MOCK_MENUS[sId] || FULL_MOCK_MENUS[1];
-    setMenu(mock.items);
+    setMenu(mock.items.map(item => ({
+      ...item,
+      originalPrice: item.price,
+      discountPercent: 0,
+      isDynamicPricing: false
+    })));
     setShopName(mock.shop_name);
     setAreaName(mock.area_name);
   };
@@ -568,41 +608,44 @@ export default function Menu() {
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setAutobookItem({
-                        item_id: item.item_id,
-                        shop_id: item.shop_id,
-                        shop_name: item.shop_name || shopName,
-                        item_name: item.item_name,
-                        price: item.price
-                      })}
-                      className="px-2.5 py-1.5 rounded-xl bg-pink-950/60 hover:bg-pink-900 text-pink-200 border border-pink-500/40 transition-all flex items-center space-x-1 text-[11px] font-medium shadow-sm hover:scale-105 active:scale-95 shrink-0 relative z-10"
-                      title="Schedule daily auto-order for this food item"
-                    >
-                      <Repeat size={13} className="text-pink-300" />
-                      <span className="hidden sm:inline">Autobook</span>
-                    </button>
-
-                    {/* Quantity Modifier Buttons */}
-                    <div className="flex items-center space-x-2 bg-[#930E36]/40 backdrop-blur-md p-1.5 rounded-xl border border-[#930E36]/60 shrink-0 relative z-10">
-                      {qty > 0 && (
-                        <>
-                          <button
-                            onClick={() => handleAddToCart(item, -1)}
-                            className="w-7 h-7 bg-white text-[#4C1829] font-medium rounded-lg flex items-center justify-center transition-colors shadow-sm"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <span className="w-6 text-center text-xs text-white">{qty}</span>
-                        </>
-                      )}
+                    {/* Right side controls: Autobook button + Quantity Modifier */}
+                    <div className="flex items-center space-x-2 shrink-0 relative z-10">
                       <button
-                        onClick={() => handleAddToCart(item, 1)}
-                        className="w-7 h-7 bg-white text-[#4C1829] font-medium rounded-lg flex items-center justify-center transition-colors shadow-sm"
+                        type="button"
+                        onClick={() => setAutobookItem({
+                          item_id: item.item_id,
+                          shop_id: item.shop_id,
+                          shop_name: item.shop_name || shopName,
+                          item_name: item.item_name,
+                          price: item.price
+                        })}
+                        className="px-2.5 py-1.5 rounded-xl bg-pink-950/60 hover:bg-pink-900 text-pink-200 border border-pink-500/40 transition-all flex items-center space-x-1.5 text-xs font-medium shadow-sm hover:scale-105 active:scale-95 shrink-0"
+                        title="Schedule daily auto-order for this food item"
                       >
-                        <Plus size={14} />
+                        <Repeat size={13} className="text-pink-300 shrink-0" />
+                        <span className="font-medium">Autobook</span>
                       </button>
+
+                      {/* Quantity Modifier Buttons */}
+                      <div className="flex items-center space-x-1.5 bg-[#930E36]/40 backdrop-blur-md p-1 rounded-xl border border-[#930E36]/60 shrink-0">
+                        {qty > 0 && (
+                          <>
+                            <button
+                              onClick={() => handleAddToCart(item, -1)}
+                              className="w-7 h-7 bg-white text-[#4C1829] font-medium rounded-lg flex items-center justify-center transition-colors shadow-sm"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className="w-5 text-center text-xs text-white font-semibold">{qty}</span>
+                          </>
+                        )}
+                        <button
+                          onClick={() => handleAddToCart(item, 1)}
+                          className="w-7 h-7 bg-white text-[#4C1829] font-medium rounded-lg flex items-center justify-center transition-colors shadow-sm"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
                     </div>
 
                   </div>
@@ -671,7 +714,15 @@ export default function Menu() {
                         <div className="space-y-0.5 max-w-[45%]">
                           <div className="font-medium text-white truncate">{c.name}</div>
                           <div className="text-[11px] text-white/70">
-                            ₹{c.price} ea • <span className="text-white font-medium">₹{c.price * c.quantity}</span>
+                            {c.isDynamicPricing && c.originalPrice && c.originalPrice > c.price ? (
+                              <span className="flex items-center space-x-1 flex-wrap">
+                                <span className="text-emerald-400 font-bold">₹{c.price}</span>
+                                <span className="text-white/40 line-through text-[10px]">₹{c.originalPrice}</span>
+                                <span>• ₹{c.price * c.quantity}</span>
+                              </span>
+                            ) : (
+                              <span>₹{c.price} ea • <span className="text-white font-medium">₹{c.price * c.quantity}</span></span>
+                            )}
                           </div>
                         </div>
 
@@ -791,11 +842,19 @@ export default function Menu() {
                           key={c.id}
                           className="flex items-center justify-between p-2 rounded-xl bg-[#930E36]/30 border border-[#930E36]/50 text-xs text-white"
                         >
-                          <div className="truncate max-w-[48%]">
+                          <div className="truncate max-w-[50%]">
                             <p className="font-medium text-white truncate">{c.name}</p>
-                            <p className="text-[11px] text-white/70">
-                              ₹{c.price} ea • <span className="text-white font-medium">₹{c.price * c.quantity}</span>
-                            </p>
+                            <div className="text-[11px] text-white/70">
+                              {c.isDynamicPricing && c.originalPrice && c.originalPrice > c.price ? (
+                                <span className="flex items-center space-x-1.5 flex-wrap">
+                                  <span className="text-emerald-400 font-bold">₹{c.price} ea</span>
+                                  <span className="text-white/40 line-through">₹{c.originalPrice}</span>
+                                  <span className="text-white font-medium">• ₹{c.price * c.quantity}</span>
+                                </span>
+                              ) : (
+                                <span>₹{c.price} ea • <span className="text-white font-medium">₹{c.price * c.quantity}</span></span>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center space-x-1.5 shrink-0">
                             <button
