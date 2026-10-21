@@ -9,7 +9,9 @@ import {
     deleteStaffMenuItem,
     getStaffStallInfo,
     updateStaffStallInfo,
-    getCategories
+    getCategories,
+    toggleClosingClearance,
+    toggleItemDynamicPricing
 } from '../controllers/staffController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -29,10 +31,13 @@ router.put('/menu/:itemId', updateStaffMenuItem);
 router.patch('/menu/:itemId', updateStaffMenuItem);
 router.delete('/menu/:itemId', deleteStaffMenuItem);
 
+// Dynamic Pricing & Closing Clearance
+router.post('/dynamic-pricing/closing-clearance', toggleClosingClearance);
+router.post('/dynamic-pricing/item/:itemId', toggleItemDynamicPricing);
+
 // Stall & Profile Management
 router.get('/stall', getStaffStallInfo);
 router.put('/stall', updateStaffStallInfo);
 router.get('/categories', getCategories);
 
 export default router;
-

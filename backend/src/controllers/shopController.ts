@@ -22,7 +22,9 @@ export const getShops = async (req: Request, res: Response): Promise<void> => {
             name: s.name,
             status: s.status,
             area_id: s.areaId,
-            area_name: s.area.name
+            area_name: s.area.name,
+            isClosingSoon: Boolean(s.isClosingSoon),
+            closingDiscount: s.closingDiscount || 0
         }));
         res.json(mapped);
     } catch (error) {
@@ -38,7 +40,13 @@ export const getShopById = async (req: Request, res: Response): Promise<void> =>
             res.status(404).json({ error: 'Shop not found' });
             return;
         }
-        res.json({ shop_id: shop.id, name: shop.name, status: shop.status });
+        res.json({
+            shop_id: shop.id,
+            name: shop.name,
+            status: shop.status,
+            isClosingSoon: Boolean(shop.isClosingSoon),
+            closingDiscount: shop.closingDiscount || 0
+        });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch shop' });
     }
@@ -68,7 +76,12 @@ export const getShopMenu = async (req: Request, res: Response): Promise<void> =>
                 description: cleanDescription,
                 quantityAvailable,
                 category_name: item.category.name,
-                price: item.price
+                price: item.price,
+                originalPrice: item.originalPrice || item.price,
+                discountPercent: item.discountPercent || 0,
+                isDynamicPricing: Boolean(item.isDynamicPricing),
+                isClosingSoon: Boolean(item.shop?.isClosingSoon),
+                closingDiscount: item.shop?.closingDiscount || 0
             };
         });
         res.json(mapped);
@@ -78,6 +91,5 @@ export const getShopMenu = async (req: Request, res: Response): Promise<void> =>
 };
 
 export const getShopTiming = async (req: Request, res: Response): Promise<void> => {
-    // SQLite dummy response for timing
     res.json([]);
 };

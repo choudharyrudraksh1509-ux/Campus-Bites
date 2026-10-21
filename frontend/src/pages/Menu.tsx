@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2, Trash2, Repeat, Calendar, Lock, Timer } from 'lucide-react';
+import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2, Trash2, Repeat, Calendar, Lock, Timer, Flame, Tag } from 'lucide-react';
 import api from '../services/api';
 import orderService from '../services/orderService';
 import SingleOutletModal from '../components/SingleOutletModal';
@@ -14,6 +14,11 @@ interface MenuItem {
   item_name: string;
   category_name: string;
   price: number;
+  originalPrice?: number;
+  discountPercent?: number;
+  isDynamicPricing?: boolean;
+  isClosingSoon?: boolean;
+  closingDiscount?: number;
   description?: string;
   is_veg?: boolean;
   quantityAvailable?: number | null;
@@ -207,6 +212,8 @@ export default function Menu() {
   const [showPaymentGateway, setShowPaymentGateway] = useState(false);
   const [shopQueueEst, setShopQueueEst] = useState({ queueNumber: 1, activeOrdersCount: 0, basePrepMinutes: 10, estimatedMinutes: 10 });
   const [pendingItem, setPendingItem] = useState<MenuItem | null>(null);
+  const [isClosingSoon, setIsClosingSoon] = useState(false);
+  const [closingDiscount, setClosingDiscount] = useState(0);
 
   // Checkout modal
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -244,6 +251,10 @@ export default function Menu() {
     api.get(`/shops/${sId}/menu`)
       .then(res => {
         if (res.data && res.data.length > 0) {
+          const first = res.data[0];
+          setIsClosingSoon(Boolean(first?.isClosingSoon));
+          setClosingDiscount(first?.closingDiscount || 0);
+
           setMenu(res.data.map((item: any) => ({
             item_id: item.id || item.item_id,
             shop_id: item.shopId || item.shop_id || sId,
@@ -251,6 +262,11 @@ export default function Menu() {
             item_name: item.name || item.item_name,
             category_name: item.category?.name || item.category_name || 'General',
             price: Number(item.price),
+            originalPrice: item.originalPrice ? Number(item.originalPrice) : Number(item.price),
+            discountPercent: item.discountPercent ? Number(item.discountPercent) : 0,
+            isDynamicPricing: Boolean(item.isDynamicPricing),
+            isClosingSoon: Boolean(item.isClosingSoon),
+            closingDiscount: item.closingDiscount || 0,
             quantityAvailable: item.quantityAvailable,
             is_veg: item.is_veg !== undefined ? item.is_veg : !item.name.toLowerCase().includes('chicken') && !item.name.toLowerCase().includes('egg')
           })));
@@ -263,6 +279,15 @@ export default function Menu() {
         loadMockData();
       })
       .finally(() => setLoading(false));
+
+    api.get(`/shops/${sId}`)
+      .then(res => {
+        if (res.data) {
+          if (res.data.isClosingSoon !== undefined) setIsClosingSoon(Boolean(res.data.isClosingSoon));
+          if (res.data.closingDiscount) setClosingDiscount(res.data.closingDiscount);
+        }
+      })
+      .catch(() => {});
     orderService.getShopQueueEstimate(sId).then(est => { if (est) setShopQueueEst(est); }).catch(() => {});
   }, [sId]);
 
@@ -488,7 +513,17 @@ export default function Menu() {
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-white mt-1">₹{item.price}</p>
+                        {item.isDynamicPricing && item.originalPrice && item.originalPrice > item.price ? (
+                          <div className="flex items-baseline space-x-2 mt-1">
+                            <p className="text-sm font-bold text-emerald-400">₹{item.price}</p>
+                            <span className="text-xs text-white/40 line-through">₹{item.originalPrice}</span>
+                            <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/40 font-bold px-1.5 py-0.5 rounded-full animate-pulse">
+                              🔥 {item.discountPercent || Math.round((1 - item.price / item.originalPrice) * 100)}% OFF
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-white mt-1">₹{item.price}</p>
+                        )}
                       </div>
                     </div>
 

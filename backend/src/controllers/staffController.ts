@@ -209,10 +209,15 @@ export const getStaffMenu = async (req: AuthRequest, res: Response): Promise<voi
                 item_name: item.name,
                 description: cleanDescription,
                 price: item.price,
+                originalPrice: item.originalPrice || item.price,
+                discountPercent: item.discountPercent || 0,
+                isDynamicPricing: Boolean(item.isDynamicPricing),
                 isAvailable: item.isAvailable,
                 quantityAvailable,
                 category_id: item.categoryId,
-                category_name: item.category.name
+                category_name: item.category.name,
+                isClosingSoon: Boolean(item.shop?.isClosingSoon),
+                closingDiscount: item.shop?.closingDiscount || 0
             };
         });
 
@@ -230,7 +235,7 @@ export const addStaffMenuItem = async (req: AuthRequest, res: Response): Promise
         const shop = await getStaffAssignedShop(staffId, req.user?.shopId);
         if (!shop) { res.status(404).json({ error: 'No stall found for staff' }); return; }
 
-        const { name, price, description, categoryId, categoryName, isAvailable, quantityAvailable } = req.body;
+        const { name, price, description, categoryId, categoryName, isAvailable, quantityAvailable, originalPrice, discountPercent, isDynamicPricing } = req.body;
         if (!name || !name.trim()) {
             res.status(400).json({ error: 'Item name is required' });
             return;
@@ -311,11 +316,14 @@ export const updateStaffMenuItem = async (req: AuthRequest, res: Response): Prom
             return;
         }
 
-        const { name, price, description, categoryId, categoryName, isAvailable, quantityAvailable } = req.body;
+        const { name, price, description, categoryId, categoryName, isAvailable, quantityAvailable, originalPrice, discountPercent, isDynamicPricing } = req.body;
         const updateData: any = {};
 
         if (name !== undefined) updateData.name = name.trim();
         if (price !== undefined && !isNaN(Number(price))) updateData.price = Number(price);
+        if (originalPrice !== undefined && !isNaN(Number(originalPrice))) updateData.originalPrice = Number(originalPrice);
+        if (discountPercent !== undefined && !isNaN(Number(discountPercent))) updateData.discountPercent = Number(discountPercent);
+        if (isDynamicPricing !== undefined) updateData.isDynamicPricing = Boolean(isDynamicPricing);
         if (isAvailable !== undefined) updateData.isAvailable = Boolean(isAvailable);
 
         if (description !== undefined || quantityAvailable !== undefined) {
@@ -372,6 +380,9 @@ export const updateStaffMenuItem = async (req: AuthRequest, res: Response): Prom
                 name: updated.name,
                 item_name: updated.name,
                 price: updated.price,
+                originalPrice: updated.originalPrice || updated.price,
+                discountPercent: updated.discountPercent || 0,
+                isDynamicPricing: Boolean(updated.isDynamicPricing),
                 description: cleanDescription,
                 quantityAvailable: retQty,
                 isAvailable: updated.isAvailable,
@@ -436,7 +447,9 @@ export const getStaffStallInfo = async (req: AuthRequest, res: Response): Promis
                 name: shop.name,
                 status: shop.status,
                 area: shop.area?.name || 'Campus Outlet',
-                areaDescription: shop.area?.description || ''
+                areaDescription: shop.area?.description || '',
+                isClosingSoon: Boolean(shop.isClosingSoon),
+                closingDiscount: shop.closingDiscount || 0
             },
             staff: {
                 id: staffUser?.id,
@@ -489,5 +502,174 @@ export const getCategories = async (_req: AuthRequest, res: Response): Promise<v
         res.json(categories);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+};
+
+// ==========================================
+// 6. DYNAMIC PRICING & CLOSING CLEARANCE
+// ==========================================
+export const toggleClosingClearance = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const staffId = req.user?.userId;
+        if (!staffId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const shop = await getStaffAssignedShop(staffId, req.user?.shopId);
+        if (!shop) { res.status(404).json({ error: 'No stall found for staff' }); return; }
+
+        const { isClosingSoon, discountPercent, onlySurplus } = req.body;
+        const closingDiscount = Number(discountPercent) || 25;
+
+        if (isClosingSoon) {
+            await prisma.shop.update({
+                where: { id: shop.id },
+                data: {
+                    isClosingSoon: true,
+                    closingDiscount: closingDiscount
+                }
+            });
+
+            const items = await prisma.foodItem.findMany({
+                where: { shopId: shop.id, isAvailable: true }
+            });
+
+            for (const item of items) {
+                let hasSurplus = true;
+                if (onlySurplus) {
+                    const match = (item.description || '').match(/\[Qty:\s*(\d+)\]/i);
+                    const qty = match ? parseInt(match[1], 10) : 0;
+                    hasSurplus = qty > 0;
+                }
+
+                if (hasSurplus) {
+                    const baseOriginal = (item.originalPrice && item.originalPrice > 0) ? item.originalPrice : item.price;
+                    const discounted = Math.max(5, Math.round(baseOriginal * (1 - closingDiscount / 100)));
+
+                    await prisma.foodItem.update({
+                        where: { id: item.id },
+                        data: {
+                            originalPrice: baseOriginal,
+                            price: discounted,
+                            discountPercent: closingDiscount,
+                            isDynamicPricing: true
+                        }
+                    });
+                }
+            }
+
+            res.json({
+                message: `Closing clearance sale active: ${closingDiscount}% discount applied to surplus items`,
+                isClosingSoon: true,
+                closingDiscount
+            });
+        } else {
+            await prisma.shop.update({
+                where: { id: shop.id },
+                data: {
+                    isClosingSoon: false,
+                    closingDiscount: 0
+                }
+            });
+
+            const items = await prisma.foodItem.findMany({
+                where: { shopId: shop.id }
+            });
+
+            for (const item of items) {
+                const regularPrice = (item.originalPrice && item.originalPrice > 0) ? item.originalPrice : item.price;
+                await prisma.foodItem.update({
+                    where: { id: item.id },
+                    data: {
+                        price: regularPrice,
+                        discountPercent: 0,
+                        isDynamicPricing: false
+                    }
+                });
+            }
+
+            res.json({
+                message: 'Closing clearance ended. Regular menu prices restored.',
+                isClosingSoon: false,
+                closingDiscount: 0
+            });
+        }
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to toggle closing clearance' });
+    }
+};
+
+export const toggleItemDynamicPricing = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const staffId = req.user?.userId;
+        if (!staffId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const shop = await getStaffAssignedShop(staffId, req.user?.shopId);
+        const { itemId } = req.params;
+        const iId = Number(itemId);
+
+        const existing = await prisma.foodItem.findUnique({ where: { id: iId } });
+        if (!existing) { res.status(404).json({ error: 'Menu item not found' }); return; }
+
+        if (req.user?.role === 'STAFF' && shop && existing.shopId !== shop.id) {
+            res.status(403).json({ error: 'Unauthorized: Cannot modify items of another stall' });
+            return;
+        }
+
+        const { isDynamicPricing, discountPercent, customPrice } = req.body;
+
+        if (isDynamicPricing) {
+            const pct = Number(discountPercent) || 20;
+            const originalPrice = (existing.originalPrice && existing.originalPrice > 0) ? existing.originalPrice : existing.price;
+            const discountedPrice = (customPrice !== undefined && Number(customPrice) > 0)
+                ? Number(customPrice)
+                : Math.max(5, Math.round(originalPrice * (1 - pct / 100)));
+
+            const updated = await prisma.foodItem.update({
+                where: { id: iId },
+                data: {
+                    originalPrice: originalPrice,
+                    price: discountedPrice,
+                    discountPercent: pct,
+                    isDynamicPricing: true
+                },
+                include: { category: true }
+            });
+
+            res.json({
+                message: `Surplus discount of ${pct}% applied to ${updated.name}`,
+                item: {
+                    id: updated.id,
+                    name: updated.name,
+                    price: updated.price,
+                    originalPrice: updated.originalPrice,
+                    discountPercent: updated.discountPercent,
+                    isDynamicPricing: updated.isDynamicPricing
+                }
+            });
+        } else {
+            const regularPrice = (existing.originalPrice && existing.originalPrice > 0) ? existing.originalPrice : existing.price;
+            const updated = await prisma.foodItem.update({
+                where: { id: iId },
+                data: {
+                    price: regularPrice,
+                    discountPercent: 0,
+                    isDynamicPricing: false
+                },
+                include: { category: true }
+            });
+
+            res.json({
+                message: `Surplus discount removed for ${updated.name}`,
+                item: {
+                    id: updated.id,
+                    name: updated.name,
+                    price: updated.price,
+                    originalPrice: updated.originalPrice,
+                    discountPercent: updated.discountPercent,
+                    isDynamicPricing: updated.isDynamicPricing
+                }
+            });
+        }
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to toggle dynamic pricing on item' });
     }
 };

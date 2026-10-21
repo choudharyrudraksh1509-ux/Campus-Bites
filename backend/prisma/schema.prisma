@@ -53,7 +53,9 @@ model Shop {
   ownerId   Int
   areaId    Int
   name      String
-  status    String   @default("ACTIVE")
+  status          String   @default("ACTIVE")
+  isClosingSoon   Boolean  @default(false)
+  closingDiscount Float?   @default(0)
   createdAt DateTime @default(now())
 
   owner     User     @relation("OwnerShops", fields: [ownerId], references: [id])
@@ -88,7 +90,10 @@ model FoodItem {
   categoryId  Int
   name        String
   description String?
-  price       Float
+  price            Float
+  originalPrice    Float?
+  discountPercent  Float?   @default(0)
+  isDynamicPricing Boolean  @default(false)
   isAvailable Boolean  @default(true)
   
   shop        Shop     @relation(fields: [shopId], references: [id])

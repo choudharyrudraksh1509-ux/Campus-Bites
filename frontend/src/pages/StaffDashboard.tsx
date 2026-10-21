@@ -26,6 +26,8 @@ import {
   Square, 
   SlidersHorizontal, 
   ChevronDown,
+  Flame,
+  Tag,
   X 
 } from 'lucide-react';
 import api from '../services/api';
@@ -55,10 +57,15 @@ interface FoodItem {
   item_name?: string;
   description?: string;
   price: number;
+  originalPrice?: number;
+  discountPercent?: number;
+  isDynamicPricing?: boolean;
   isAvailable: boolean;
   quantityAvailable?: number | null;
   category_id?: number;
   category_name?: string;
+  isClosingSoon?: boolean;
+  closingDiscount?: number;
 }
 
 interface OrderItem {
@@ -100,6 +107,8 @@ interface StallInfo {
   status: string;
   area: string;
   areaDescription?: string;
+  isClosingSoon?: boolean;
+  closingDiscount?: number;
 }
 
 interface StaffInfo {
@@ -185,6 +194,26 @@ export default function StaffDashboard() {
   }>({
     isOpen: false,
     item: null,
+    isSubmitting: false
+  });
+
+  // Dynamic Pricing & Closing Clearance States
+  const [closingClearanceLoading, setClosingClearanceLoading] = useState(false);
+  const [clearanceDiscountInput, setClearanceDiscountInput] = useState<number>(25);
+  const [clearanceOnlySurplus, setClearanceOnlySurplus] = useState<boolean>(true);
+  const [dynamicPricingModal, setDynamicPricingModal] = useState<{
+    isOpen: boolean;
+    item: FoodItem | null;
+    discountPercent: number;
+    customPrice: string;
+    isDynamicPricing: boolean;
+    isSubmitting: boolean;
+  }>({
+    isOpen: false,
+    item: null,
+    discountPercent: 20,
+    customPrice: '',
+    isDynamicPricing: false,
     isSubmitting: false
   });
 
@@ -281,14 +310,55 @@ export default function StaffDashboard() {
 
   const fetchMenu = async () => {
     try {
-      const [menuRes, catRes] = await Promise.all([
+      const [menuRes, catRes, stallRes] = await Promise.all([
         api.get('/staff/menu'),
-        api.get('/staff/categories')
+        api.get('/staff/categories'),
+        api.get('/staff/stall').catch(() => null)
       ]);
       setMenu(menuRes.data || []);
       setCategories(catRes.data || []);
+      if (stallRes?.data?.stall) {
+        setStallInfo(stallRes.data.stall);
+      }
     } catch (err) {
       console.error('Failed to fetch menu:', err);
+    }
+  };
+
+  const handleToggleClosingClearance = async (activate: boolean) => {
+    setClosingClearanceLoading(true);
+    try {
+      const res = await api.post('/staff/dynamic-pricing/closing-clearance', {
+        isClosingSoon: activate,
+        discountPercent: clearanceDiscountInput,
+        onlySurplus: clearanceOnlySurplus
+      });
+      showToast(res.data?.message || (activate ? 'Closing clearance sale activated!' : 'Regular prices restored!'));
+      await fetchMenu();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to update closing clearance sale', 'error');
+    } finally {
+      setClosingClearanceLoading(false);
+    }
+  };
+
+  const handleApplyItemDynamicPricing = async () => {
+    if (!dynamicPricingModal.item) return;
+    const itemId = dynamicPricingModal.item.id || dynamicPricingModal.item.item_id;
+    setDynamicPricingModal(prev => ({ ...prev, isSubmitting: true }));
+    try {
+      const res = await api.post(`/staff/dynamic-pricing/item/${itemId}`, {
+        isDynamicPricing: dynamicPricingModal.isDynamicPricing,
+        discountPercent: dynamicPricingModal.discountPercent,
+        customPrice: dynamicPricingModal.customPrice ? Number(dynamicPricingModal.customPrice) : undefined
+      });
+      showToast(res.data?.message || 'Item dynamic discount updated');
+      setDynamicPricingModal(prev => ({ ...prev, isOpen: false }));
+      await fetchMenu();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to apply discount', 'error');
+    } finally {
+      setDynamicPricingModal(prev => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -1082,6 +1152,90 @@ export default function StaffDashboard() {
           {/* ===================================================== */}
           {activeTab === 'menu' && (
             <div className="space-y-5">
+
+              {/* Dynamic Pricing & Closing Clearance Control Banner */}
+              <div className={`rounded-2xl border p-4 sm:p-5 transition-all shadow-xl ${
+                stallInfo?.isClosingSoon
+                  ? 'bg-gradient-to-r from-red-950/80 via-amber-950/60 to-black/80 border-red-500/50'
+                  : 'bg-white/[0.03] border-white/10'
+              }`}>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center space-x-3.5">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+                      stallInfo?.isClosingSoon 
+                        ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse'
+                        : 'bg-white/5 border-white/10 text-white/50'
+                    }`}>
+                      <Flame size={24} />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                          Closing Clearance & Dynamic Pricing
+                        </h3>
+                        {stallInfo?.isClosingSoon ? (
+                          <span className="bg-red-500 text-white text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full animate-bounce">
+                            ACTIVE • {stallInfo.closingDiscount || 25}% OFF
+                          </span>
+                        ) : (
+                          <span className="bg-white/10 text-white/50 text-[10px] font-medium uppercase px-2 py-0.5 rounded-full">
+                            OFF
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-white/60 mt-0.5">
+                        {stallInfo?.isClosingSoon 
+                          ? `Stall is closing soon. Dynamic discount of ${stallInfo.closingDiscount || 25}% is currently applied to surplus food items to clear remaining stock.`
+                          : 'Stall closing soon with leftover quantity? Activate a dynamic clearance discount across surplus items to quickly clear inventory.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {!stallInfo?.isClosingSoon ? (
+                      <>
+                        <div className="flex items-center space-x-1.5 bg-black/40 border border-white/10 rounded-xl p-1 text-xs">
+                          <span className="text-white/40 text-[11px] px-2">Discount:</span>
+                          {[15, 25, 35, 50].map((d) => (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => setClearanceDiscountInput(d)}
+                              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-all ${
+                                clearanceDiscountInput === d
+                                  ? 'bg-amber-400 text-black shadow-sm'
+                                  : 'text-white/70 hover:text-white'
+                              }`}
+                            >
+                              {d}%
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={closingClearanceLoading}
+                          onClick={() => handleToggleClosingClearance(true)}
+                          className="bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold tracking-wider uppercase transition-all shadow-lg shadow-red-900/30 flex items-center space-x-1.5"
+                        >
+                          <Flame size={14} />
+                          <span>{closingClearanceLoading ? 'Activating...' : `Activate ${clearanceDiscountInput}% Clearance`}</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={closingClearanceLoading}
+                        onClick={() => handleToggleClosingClearance(false)}
+                        className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-xl text-xs font-bold tracking-wider uppercase transition-all flex items-center space-x-1.5"
+                      >
+                        <X size={14} />
+                        <span>{closingClearanceLoading ? 'Restoring...' : 'End Clearance Sale & Restore Regular Prices'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
               
               {/* Menu Controls Bar */}
               <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
@@ -1157,8 +1311,18 @@ export default function StaffDashboard() {
                                 {item.category_name || 'General'}
                               </span>
                             </td>
-                            <td className="px-5 py-3.5 text-right font-mono font-bold text-white text-sm">
-                              ₹{item.price}
+                            <td className="px-5 py-3.5 text-right font-mono">
+                              {item.isDynamicPricing && item.originalPrice && item.originalPrice > item.price ? (
+                                <div>
+                                  <div className="font-bold text-emerald-400 text-sm">₹{item.price}</div>
+                                  <div className="text-[10px] text-white/40 line-through">₹{item.originalPrice}</div>
+                                  <span className="inline-block mt-0.5 text-[9px] bg-red-500/20 text-red-300 border border-red-500/30 px-1.5 py-0.2 rounded-full font-sans font-bold">
+                                    {item.discountPercent || Math.round((1 - item.price / item.originalPrice) * 100)}% OFF
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="font-bold text-white text-sm">₹{item.price}</div>
+                              )}
                             </td>
                             <td className="px-5 py-3.5 text-center">
                               {isAvail ? (
@@ -1186,6 +1350,32 @@ export default function StaffDashboard() {
                             </td>
                             <td className="px-5 py-3.5 text-right">
                               <div className="flex items-center justify-end space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const basePrice = (item.originalPrice && item.originalPrice > 0) ? item.originalPrice : item.price;
+                                    const currentPct = item.discountPercent || 20;
+                                    const currentPrice = item.isDynamicPricing ? item.price : Math.max(5, Math.round(basePrice * (1 - currentPct / 100)));
+                                    setDynamicPricingModal({
+                                      isOpen: true,
+                                      item,
+                                      discountPercent: currentPct,
+                                      customPrice: String(currentPrice),
+                                      isDynamicPricing: Boolean(item.isDynamicPricing),
+                                      isSubmitting: false
+                                    });
+                                  }}
+                                  className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1.5 rounded-lg border transition-all flex items-center space-x-1 ${
+                                    item.isDynamicPricing
+                                      ? 'bg-red-950/50 text-red-300 border-red-700/60 hover:bg-red-950/70'
+                                      : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+                                  }`}
+                                  title="Apply dynamic discount on leftover surplus quantity"
+                                >
+                                  <Flame size={12} className={item.isDynamicPricing ? 'text-red-400 fill-red-400' : 'text-white/40'} />
+                                  <span>{item.isDynamicPricing ? `${item.discountPercent || 20}% OFF` : 'Discount'}</span>
+                                </button>
+
                                 <button 
                                   onClick={() => handleToggleStock(item)}
                                   className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1.5 rounded-lg border transition-all ${

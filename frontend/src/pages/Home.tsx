@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Star, Clock, MessageSquare } from 'lucide-react';
+import { Store, Star, Clock, MessageSquare, Flame } from 'lucide-react';
 import api from '../services/api';
 import ReviewsModal from '../components/ReviewsModal';
 
@@ -13,6 +13,8 @@ interface Shop {
   rating?: number;
   waitTime?: string;
   tags?: string[];
+  isClosingSoon?: boolean;
+  closingDiscount?: number;
 }
 
 const MOCK_CAMPUS_SHOPS: Shop[] = [
@@ -144,9 +146,17 @@ export default function Home() {
 
                 {/* Title & Rating (White Text) */}
                 <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-xl text-white tracking-tight">
-                    {shop.name}
-                  </h3>
+                  <div>
+                    <h3 className="text-xl text-white tracking-tight">
+                      {shop.name}
+                    </h3>
+                    {shop.isClosingSoon && (
+                      <span className="inline-flex items-center space-x-1 mt-1 text-[10px] bg-red-500/20 text-red-300 border border-red-500/40 font-bold px-2 py-0.5 rounded-full animate-pulse">
+                        <Flame size={11} className="text-red-400" />
+                        <span>Closing Clearance ({shop.closingDiscount || 25}% OFF)</span>
+                      </span>
+                    )}
+                  </div>
 
                   <button
                     onClick={(e) => {
