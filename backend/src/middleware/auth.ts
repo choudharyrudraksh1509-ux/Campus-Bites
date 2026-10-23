@@ -41,3 +41,11 @@ export const requireRole = (requiredRole: string) => {
         next();
     };
 };
+
+export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user || (req.user.role !== 'ADMIN' && req.user.role !== 'OWNER')) {
+        res.status(403).json({ error: 'Forbidden: Admin access required' });
+        return;
+    }
+    next();
+};

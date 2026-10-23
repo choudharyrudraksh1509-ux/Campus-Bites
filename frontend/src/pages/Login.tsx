@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, CheckCircle2, ShieldAlert, Store, ChevronDown } from 'lucide-react';
+import { Mail, Lock, User, CheckCircle2, ShieldAlert, Store, ChevronDown, Shield } from 'lucide-react';
 import api from '../services/api';
 
 interface LoginProps {
@@ -20,7 +20,7 @@ const DEFAULT_STALLS = [
 ];
 
 export default function Login({ onSuccess }: LoginProps) {
-  const [loginType, setLoginType] = useState<'USER' | 'STAFF'>('USER');
+  const [loginType, setLoginType] = useState<'USER' | 'STAFF' | 'ADMIN'>('USER');
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -88,6 +88,12 @@ export default function Login({ onSuccess }: LoginProps) {
         return false;
       }
     }
+    if (loginType === 'ADMIN') {
+      if (!email.trim()) {
+        setError('Please enter admin email.');
+        return false;
+      }
+    }
     if (!password) {
       setError('Please enter your password.');
       return false;
@@ -132,7 +138,9 @@ export default function Login({ onSuccess }: LoginProps) {
           onSuccess(userData, userToken);
         }
 
-        if (userData.role === 'STAFF' || userData.role === 'OWNER') {
+        if (userData.role === 'ADMIN') {
+          navigate('/admin');
+        } else if (userData.role === 'STAFF' || userData.role === 'OWNER') {
           navigate('/staff');
         } else {
           navigate('/');
@@ -182,21 +190,49 @@ export default function Login({ onSuccess }: LoginProps) {
             </p>
           </div>
 
-          {/* Student vs Staff Mode Switcher */}
-          <div className="flex justify-center space-x-6 mb-4 pb-2">
+          {/* Student vs Staff vs Tech Admin Mode Switcher */}
+          <div className="flex justify-center space-x-4 mb-4 pb-2 border-b border-white/10">
             <button
+              type="button"
               onClick={() => { setLoginType('USER'); setIsRegister(false); setError(''); setEmail(''); setSelectedStallId(''); }}
-              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'USER' ? 'text-white border-b-2 border-[#930E36] pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
+              className={`text-xs uppercase tracking-wider font-semibold transition-colors ${loginType === 'USER' ? 'text-white border-b-2 border-[#FF004B] pb-1.5' : 'text-white/40 hover:text-white/80 pb-1.5'}`}
             >
-              User Login
+              Student
             </button>
             <button
+              type="button"
               onClick={() => { setLoginType('STAFF'); setIsRegister(false); setError(''); }}
-              className={`text-xs uppercase tracking-wider font-medium transition-colors ${loginType === 'STAFF' ? 'text-white border-b-2 border-[#930E36] pb-1' : 'text-white/40 hover:text-white/80 pb-1'}`}
+              className={`text-xs uppercase tracking-wider font-semibold transition-colors ${loginType === 'STAFF' ? 'text-white border-b-2 border-[#FF004B] pb-1.5' : 'text-white/40 hover:text-white/80 pb-1.5'}`}
             >
-              Staff Login
+              Stall Staff
+            </button>
+            <button
+              type="button"
+              onClick={() => { 
+                setLoginType('ADMIN'); 
+                setIsRegister(false); 
+                setError(''); 
+                setEmail('admin@campusbites.com'); 
+                setPassword('password123'); 
+              }}
+              className={`text-xs uppercase tracking-wider font-semibold transition-colors flex items-center space-x-1.5 ${loginType === 'ADMIN' ? 'text-red-400 border-b-2 border-red-500 pb-1.5' : 'text-white/40 hover:text-white/80 pb-1.5'}`}
+            >
+              <Shield size={12} className={loginType === 'ADMIN' ? 'text-red-400' : ''} />
+              <span>Tech Admin</span>
             </button>
           </div>
+
+          {loginType === 'ADMIN' && (
+            <div className="p-3 rounded-2xl bg-red-950/40 border border-red-500/40 text-xs text-red-200 space-y-1">
+              <div className="font-bold flex items-center space-x-1.5 text-white">
+                <Shield size={14} className="text-red-400" />
+                <span>Tech Operations & Platform Control</span>
+              </div>
+              <p className="text-[11px] text-white/70">
+                Administrator access to monitor all 9 stalls, real-time kitchen orders, platform analytics, and user access.
+              </p>
+            </div>
+          )}
           
           {/* Form Mode Switcher (Log In / Create Account) - Hidden for Staff */}
           {loginType === 'USER' && (

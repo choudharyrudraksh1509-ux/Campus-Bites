@@ -6,6 +6,7 @@ import orderRoutes from './order';
 import staffRoutes from './staff';
 import ownerRoutes from './owner';
 import reviewRoutes from './review';
+import adminRoutes from './admin';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/orders', orderRoutes);
 router.use('/staff', staffRoutes);
 router.use('/owner', ownerRoutes);
 router.use('/reviews', reviewRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;

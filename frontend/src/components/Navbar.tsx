@@ -78,7 +78,18 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
               </Link>
             </>
           )}
-          {user && (user.role === 'STAFF' || user.role === 'OWNER') && (
+          {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+            <Link
+              to="/admin"
+              className={`text-xs px-3.5 py-1.5 rounded-full transition-all flex items-center space-x-1.5 ${
+                location.pathname === '/admin' ? 'bg-red-600/30 text-red-400 border border-red-500/50 shadow-sm' : 'text-red-400/80 hover:text-red-300'
+              }`}
+            >
+              <Shield size={13} className="text-red-400" />
+              <span>Admin Hub</span>
+            </Link>
+          )}
+          {user && user.role === 'STAFF' && (
             <Link
               to="/staff"
               className={`text-xs px-3.5 py-1.5 rounded-full transition-all flex items-center space-x-1.5 ${
@@ -152,7 +163,7 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
             Bites
           </span>
           <span className="text-[10px] bg-[#930E36]/50 border border-[#930E36]/70 text-white/90 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">
-            {user?.role === 'STAFF' ? (user?.shopName || 'Staff Portal') : 'VIT Campus'}
+            {user?.role === 'ADMIN' ? 'Tech Admin' : user?.role === 'STAFF' ? (user?.shopName || 'Staff Portal') : 'VIT Campus'}
           </span>
         </Link>
 

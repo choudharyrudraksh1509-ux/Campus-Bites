@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Menu from './pages/Menu';
 import Orders from './pages/Orders';
 import StaffDashboard from './pages/StaffDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import api from './services/api';
 import autobookService from './services/autobookService';
@@ -138,7 +139,16 @@ function App() {
             className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 md:!pt-24 pb-0"
           >
             <Routes>
-              {user.role === 'STAFF' ? (
+              {user.role === 'ADMIN' || user.role === 'OWNER' ? (
+                <>
+                  <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/staff" element={<StaffDashboard />} />
+                  <Route path="/" element={<Home />} />
+                  <Route path="/shop/:shopId/menu" element={<Menu />} />
+                  <Route path="/orders" element={<Orders />} />
+                  <Route path="*" element={<Navigate to="/admin" replace />} />
+                </>
+              ) : user.role === 'STAFF' ? (
                 <>
                   <Route path="/staff" element={<StaffDashboard />} />
                   <Route path="*" element={<Navigate to="/staff" replace />} />
@@ -148,7 +158,6 @@ function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/shop/:shopId/menu" element={<Menu />} />
                   <Route path="/orders" element={<Orders />} />
-                  <Route path="/staff" element={<StaffDashboard />} />
                   <Route path="/login" element={<Home />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </>
