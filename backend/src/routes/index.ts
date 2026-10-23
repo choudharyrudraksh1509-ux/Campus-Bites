@@ -7,6 +7,7 @@ import staffRoutes from './staff';
 import ownerRoutes from './owner';
 import reviewRoutes from './review';
 import adminRoutes from './admin';
+import autobookRoutes from './autobook';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/staff', staffRoutes);
 router.use('/owner', ownerRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/admin', adminRoutes);
+router.use('/autobook', autobookRoutes);
 
 export default router;

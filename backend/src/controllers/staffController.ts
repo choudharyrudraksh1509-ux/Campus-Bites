@@ -1,17 +1,10 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../db/prisma';
+import { ALLOWED_ORDER_TRANSITIONS } from '../services/orderStateMachine';
 
 // Valid state transitions per architecture Section 8
-const VALID_TRANSITIONS: Record<string, string[]> = {
-    'PAYMENT_PENDING': ['PLACED', 'PREPARING', 'PAYMENT_FAILED', 'CANCELLED'],
-    'PLACED':          ['PREPARING', 'READY', 'CANCELLED'],
-    'PREPARING':       ['READY', 'COMPLETED', 'CANCELLED'],
-    'READY':           ['COMPLETED', 'CANCELLED'],
-    'COMPLETED':       [],
-    'CANCELLED':       [],
-    'PAYMENT_FAILED':  ['PAYMENT_PENDING', 'CANCELLED']
-};
+const VALID_TRANSITIONS: Record<string, string[]> = ALLOWED_ORDER_TRANSITIONS;
 
 /**
  * Helper to resolve the staff member's assigned shop reliably
@@ -66,15 +59,43 @@ export const getStaffOrders = async (req: AuthRequest, res: Response): Promise<v
         const orders = await prisma.order.findMany({
             where: {
                 shopId: shop.id,
-                status: { notIn: ['COMPLETED', 'CANCELLED', 'PAYMENT_FAILED'] }
+                status: { in: ['PLACED', 'PREPARING', 'READY'] }
             },
-            include: {
-                shop: true,
-                items: { include: { item: true } },
-                customer: true,
-                payments: true
+            select: {
+                id: true,
+                customerId: true,
+                shopId: true,
+                status: true,
+                totalAmount: true,
+                orderTime: true,
+                isPreorder: true,
+                pickupTime: true,
+                estimatedMinutes: true,
+                queueNumber: true,
+                paymentMethod: true,
+                customer: {
+                    select: {
+                        fullName: true,
+                        phone: true
+                    }
+                },
+                items: {
+                    select: {
+                        id: true,
+                        itemId: true,
+                        quantity: true,
+                        priceAtOrder: true,
+                        item: {
+                            select: {
+                                id: true,
+                                name: true,
+                                price: true
+                            }
+                        }
+                    }
+                }
             },
-            orderBy: { orderTime: 'asc' }
+            orderBy: [{ orderTime: 'asc' }, { id: 'asc' }]
         });
 
         const mapped = orders.map(o => ({
@@ -168,7 +189,7 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
             data: { status }
         });
         
-        res.json({ message: `Order status updated: ${order.status} → ${status}`, orderId: updated.id, status: updated.status });
+        res.json({ message: `Order status updated: ${order.status} → ${status}`, orderId: updated.id, status: updated.status, order: updated });
     } catch (error: any) {
         res.status(400).json({ error: error.message || 'Failed to update order status' });
     }

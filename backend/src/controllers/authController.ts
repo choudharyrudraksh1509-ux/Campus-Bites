@@ -2,21 +2,21 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../db/prisma';
+import { env } from '../config/env';
 import { ensureStallStaffSeeded } from '../services/seedService';
+import { AuthRequest } from '../middleware/auth';
 
+/**
+ * Public User Registration
+ * Enforces role = 'CUSTOMER' to prevent unauthorized privilege escalation.
+ */
 export const register = async (req: Request, res: Response): Promise<void> => {
-
     try {
-        const { fullName, email, password, phone, role } = req.body;
+        const { fullName, email, password, phone } = req.body;
         const normalizedEmail = email ? email.trim().toLowerCase() : '';
 
         const existing = await prisma.user.findFirst({
-            where: {
-                OR: [
-                    { email: normalizedEmail },
-                    { email: email ? email.trim() : '' }
-                ]
-            }
+            where: { email: normalizedEmail }
         });
         if (existing) {
             res.status(400).json({ error: 'This email ID already exists' });
@@ -46,25 +46,22 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             }
         });
 
-        const assignedRole = role || 'CUSTOMER';
-        try {
-            const roleRecord = await prisma.role.findUnique({ where: { name: assignedRole } });
-            if (roleRecord) {
-                await prisma.userRole.create({
-                    data: {
-                        userId: user.id,
-                        roleId: roleRecord.id
-                    }
-                });
-            }
-        } catch (roleErr) {
-            console.error('Error assigning role:', roleErr);
+        // Always assign CUSTOMER role for public registration
+        const assignedRole = 'CUSTOMER';
+        const roleRecord = await prisma.role.findUnique({ where: { name: assignedRole } });
+        if (roleRecord) {
+            await prisma.userRole.create({
+                data: {
+                    userId: user.id,
+                    roleId: roleRecord.id
+                }
+            });
         }
 
         const token = jwt.sign(
-            { userId: user.id, role: assignedRole },
-            process.env.JWT_SECRET || 'super_secret',
-            { expiresIn: '24h' }
+            { userId: user.id, role: assignedRole, email: user.email },
+            env.JWT_SECRET,
+            { expiresIn: '24h', algorithm: 'HS256' }
         );
 
         res.status(201).json({
@@ -74,11 +71,15 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             user: { id: user.id, name: user.fullName, email: user.email, role: assignedRole }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Registration error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
 
+/**
+ * User & Staff Authentication
+ * Strictly validates passwords using bcrypt. Zero hardcoded bypasses.
+ */
 export const login = async (req: Request, res: Response): Promise<void> => {
     try {
         const { email: rawEmail, password, shopId } = req.body;
@@ -126,12 +127,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        // 2. Validate password
-        let isValidPassword = await bcrypt.compare(password, user.passwordHash);
-        const stallSlug = user.email.toLowerCase().split('@')[0].replace('staff.', '');
-        if (!isValidPassword && (password === 'password123' || password === 'admin123' || password === `${stallSlug}@123` || password === `${stallSlug}123` || password === 'password')) {
-            isValidPassword = true;
-        }
+        // 2. Authoritative Bcrypt Password Validation (No bypasses)
+        const isValidPassword = await bcrypt.compare(password, user.passwordHash);
 
         if (!isValidPassword) {
             res.status(401).json({ error: 'Invalid credentials' });
@@ -139,7 +136,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         }
 
         const userRoles = await prisma.userRole.findMany({ where: { userId: user.id }, include: { role: true } });
-        const role = userRoles.length > 0 ? userRoles[0].role.name : 'CUSTOMER';
+        const role = (userRoles.length > 0 ? userRoles[0].role.name : 'CUSTOMER') as 'CUSTOMER' | 'STAFF' | 'OWNER' | 'ADMIN';
 
         // 3. Resolve assigned stall / shop
         let assignedShop: { id: number; name: string } | null = null;
@@ -184,10 +181,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
                 userId: user.id, 
                 role,
                 shopId: effectiveShopId,
-                shopName: effectiveShopName
+                shopName: effectiveShopName,
+                email: user.email
             },
-            process.env.JWT_SECRET || 'super_secret',
-            { expiresIn: '24h' }
+            env.JWT_SECRET,
+            { expiresIn: '24h', algorithm: 'HS256' }
         );
 
         res.json({
@@ -203,23 +201,28 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
 
-export const getMe = async (req: Request, res: Response): Promise<void> => {
+/**
+ * Hydrates current authenticated user session.
+ */
+export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const userId = (req as any).user?.userId;
+        const userId = req.user?.userId;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
+
         const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user) {
+        if (!user || !user.isActive) {
             res.status(404).json({ error: 'User not found' });
             return;
         }
+
         const userRoles = await prisma.userRole.findMany({ where: { userId }, include: { role: true } });
         const role = userRoles.length > 0 ? userRoles[0].role.name : 'CUSTOMER';
 
@@ -257,14 +260,17 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
             }
         });
     } catch (error) {
-        console.error(error);
+        console.error('GetMe error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
 
-export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+/**
+ * Updates profile details with password verification. Zero backdoors.
+ */
+export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const userId = (req as any).user?.userId;
+        const userId = req.user?.userId;
         if (!userId) {
             res.status(401).json({ error: 'Unauthorized' });
             return;
@@ -280,7 +286,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
         const updateData: { fullName?: string; phone?: string | null; passwordHash?: string } = {};
 
         if (fullName !== undefined) {
-            const trimmedName = fullName.trim();
+            const trimmedName = String(fullName).trim();
             if (!trimmedName) {
                 res.status(400).json({ error: 'Name cannot be empty' });
                 return;
@@ -314,11 +320,8 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
                 return;
             }
 
-            let isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
-            const stallSlug = user.email.toLowerCase().split('@')[0].replace('staff.', '');
-            if (!isMatch && (currentPassword === 'password123' || currentPassword === `${stallSlug}@123` || currentPassword === `${stallSlug}123` || currentPassword === 'password' || user.passwordHash === currentPassword)) {
-                isMatch = true;
-            }
+            // Strict bcrypt verification (no bypasses)
+            const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
 
             if (!isMatch) {
                 res.status(400).json({ error: 'Current password is incorrect' });
@@ -357,8 +360,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
             }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Update profile error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
-

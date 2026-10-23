@@ -29,6 +29,7 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [autobookSchedules, setAutobookSchedules] = useState<AutobookSchedule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'AUTOBOOK'>('ALL');
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
@@ -37,14 +38,18 @@ export default function Orders() {
   const fetchOrdersAndSchedules = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsRefreshing(true);
     try {
+      setError(null);
       const [ordersData, schedulesData] = await Promise.all([
         orderService.getOrders(),
         autobookService.getSchedules()
       ]);
       setOrders(ordersData);
       setAutobookSchedules(schedulesData);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load orders or schedules', err);
+      if (!isSilent) {
+        setError(err.response?.data?.error || err.message || 'Unable to load orders from server.');
+      }
     } finally {
       setLoading(false);
       if (!isSilent) setIsRefreshing(false);
@@ -514,10 +519,14 @@ export default function Orders() {
                           </div>
                         </div>
 
-                        {/* Payment Mode demo badge */}
+                        {/* Payment Mode demo vs verified badge */}
                         <div className="flex items-center space-x-1.5 self-start sm:self-auto bg-black/25 px-2.5 py-1 rounded-xl border border-white/10 text-[11px] text-white/80 font-mono">
                           <CreditCard size={12} className="text-pink-300" />
-                          <span>{order.payment_method ? order.payment_method.replace(/_/g, ' ') : 'DEMO GATEWAY'}</span>
+                          {order.payment_method === 'ONLINE_DEMO' ? (
+                            <span className="text-amber-300 font-semibold">DEMO SANDBOX (ONLINE_DEMO)</span>
+                          ) : (
+                            <span className="text-emerald-300 font-semibold">VERIFIED ({order.payment_method || 'ONLINE'})</span>
+                          )}
                         </div>
                       </div>
                     )}

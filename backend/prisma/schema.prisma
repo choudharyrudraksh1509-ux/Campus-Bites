@@ -8,21 +8,22 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-
 model User {
-  id           Int       @id @default(autoincrement())
+  id           Int          @id @default(autoincrement())
   fullName     String
-  email        String    @unique
+  email        String       @unique
   phone        String?
   passwordHash String
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
 
   roles        UserRole[]
-  ownedShops   Shop[]    @relation("OwnerShops")
+  ownedShops   Shop[]       @relation("OwnerShops")
   staffShops   ShopStaff[]
-  orders       Order[]   @relation("CustomerOrders")
+  orders       Order[]      @relation("CustomerOrders")
   reviews      Review[]
+  autobooks    AutobookSchedule[]
+  auditLogs    AuditLog[]
 }
 
 model Role {
@@ -35,10 +36,12 @@ model UserRole {
   id     Int  @id @default(autoincrement())
   userId Int
   roleId Int
-  user   User @relation(fields: [userId], references: [id])
-  role   Role @relation(fields: [roleId], references: [id])
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
   
   @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
 }
 
 model Area {
@@ -49,22 +52,27 @@ model Area {
 }
 
 model Shop {
-  id        Int      @id @default(autoincrement())
-  ownerId   Int
-  areaId    Int
-  name      String
-  status          String   @default("ACTIVE")
-  isClosingSoon   Boolean  @default(false)
-  closingDiscount Float?   @default(0)
-  createdAt DateTime @default(now())
+  id              Int       @id @default(autoincrement())
+  ownerId         Int
+  areaId          Int
+  name            String
+  status          String    @default("ACTIVE")
+  isClosingSoon   Boolean   @default(false)
+  closingDiscount Float?    @default(0)
+  createdAt       DateTime  @default(now())
 
-  owner     User     @relation("OwnerShops", fields: [ownerId], references: [id])
-  area      Area     @relation(fields: [areaId], references: [id])
+  owner           User      @relation("OwnerShops", fields: [ownerId], references: [id], onDelete: Restrict)
+  area            Area      @relation(fields: [areaId], references: [id], onDelete: Restrict)
   
-  staff     ShopStaff[]
-  items     FoodItem[]
-  orders    Order[]
-  reviews   Review[]
+  staff           ShopStaff[]
+  items           FoodItem[]
+  orders          Order[]
+  reviews         Review[]
+  autobooks       AutobookSchedule[]
+
+  @@index([ownerId])
+  @@index([areaId])
+  @@index([status])
 }
 
 model ShopStaff {
@@ -72,10 +80,12 @@ model ShopStaff {
   shopId  Int
   staffId Int
   
-  shop    Shop @relation(fields: [shopId], references: [id])
-  staff   User @relation(fields: [staffId], references: [id])
+  shop    Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  staff   User @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@unique([shopId, staffId])
+  @@index([shopId])
+  @@index([staffId])
 }
 
 model Category {
@@ -85,41 +95,57 @@ model Category {
 }
 
 model FoodItem {
-  id          Int      @id @default(autoincrement())
-  shopId      Int
-  categoryId  Int
-  name        String
-  description String?
+  id               Int         @id @default(autoincrement())
+  shopId           Int
+  categoryId       Int
+  name             String
+  description      String?
   price            Float
   originalPrice    Float?
-  discountPercent  Float?   @default(0)
-  isDynamicPricing Boolean  @default(false)
-  isAvailable Boolean  @default(true)
+  discountPercent  Float?      @default(0)
+  isDynamicPricing Boolean     @default(false)
+  isAvailable      Boolean     @default(true)
   
-  shop        Shop     @relation(fields: [shopId], references: [id])
-  category    Category @relation(fields: [categoryId], references: [id])
-  orderItems  OrderItem[]
+  shop             Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  category         Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  orderItems       OrderItem[]
+  autobooks        AutobookSchedule[]
+
+  @@index([shopId])
+  @@index([categoryId])
+  @@index([isAvailable])
+  @@index([isDynamicPricing])
+  @@index([shopId, isAvailable])
 }
 
 model Order {
-  id          Int      @id @default(autoincrement())
-  customerId  Int
-  shopId      Int
-  status      String   @default("PAYMENT_PENDING")
-  totalAmount Float
-  orderTime   DateTime @default(now())
-  isPreorder  Boolean  @default(false)
-  pickupTime  String?
+  id               Int              @id @default(autoincrement())
+  customerId       Int
+  shopId           Int
+  status           String           @default("PAYMENT_PENDING")
+  totalAmount      Float
+  orderTime        DateTime         @default(now())
+  isPreorder       Boolean          @default(false)
+  pickupTime       String?
   estimatedMinutes Int?
-  queueNumber Int?
-  paymentMethod String? @default("ONLINE")
+  queueNumber      Int?
+  paymentMethod    String?          @default("ONLINE")
+  idempotencyKey   String?          @unique
 
-  customer    User     @relation("CustomerOrders", fields: [customerId], references: [id])
-  shop        Shop     @relation(fields: [shopId], references: [id])
+  customer         User             @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Restrict)
+  shop             Shop             @relation(fields: [shopId], references: [id], onDelete: Restrict)
   
-  items       OrderItem[]
-  payments    PaymentAttempt[]
-  reviews     Review[]
+  items            OrderItem[]
+  payments         PaymentAttempt[]
+  reviews          Review[]
+
+  @@index([customerId])
+  @@index([shopId])
+  @@index([status])
+  @@index([orderTime])
+  @@index([shopId, status])
+  @@index([customerId, orderTime(sort: Desc)])
+  @@index([shopId, status, orderTime(sort: Asc)])
 }
 
 model OrderItem {
@@ -129,18 +155,24 @@ model OrderItem {
   quantity     Int
   priceAtOrder Float
 
-  order        Order    @relation(fields: [orderId], references: [id])
-  item         FoodItem @relation(fields: [itemId], references: [id])
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item         FoodItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([itemId])
 }
 
 model PaymentAttempt {
-  id            Int      @id @default(autoincrement())
-  orderId       Int
-  amount        Float
-  status        String   @default("PENDING")
-  attemptTime   DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  amount      Float
+  status      String   @default("PENDING")
+  attemptTime DateTime @default(now())
 
-  order         Order    @relation(fields: [orderId], references: [id])
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
 }
 
 model Review {
@@ -152,9 +184,14 @@ model Review {
   comment    String?
   createdAt  DateTime @default(now())
 
-  order      Order    @relation(fields: [orderId], references: [id])
-  customer   User     @relation(fields: [customerId], references: [id])
-  shop       Shop     @relation(fields: [shopId], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer   User     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@index([shopId])
+  @@index([rating])
+  @@index([shopId, createdAt(sort: Desc)])
 }
 
 model AutobookSchedule {
@@ -167,4 +204,45 @@ model AutobookSchedule {
   isActive      Boolean  @default(true)
   lastRunDate   String?
   createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop          Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  item          FoodItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  executionLogs AutobookExecutionLog[]
+
+  @@index([userId])
+  @@index([shopId])
+  @@index([itemId])
+  @@index([isActive, scheduledTime])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int
+  action     String
+  entity     String
+  entityId   Int?
+  details    String?
+  createdAt  DateTime @default(now())
+
+  admin      User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model AutobookExecutionLog {
+  id           Int              @id @default(autoincrement())
+  scheduleId   Int
+  attemptTime  DateTime         @default(now())
+  status       String
+  orderId      Int?
+  errorMessage String?
+
+  schedule     AutobookSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([attemptTime])
 }

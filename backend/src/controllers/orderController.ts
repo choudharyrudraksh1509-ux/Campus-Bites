@@ -1,6 +1,23 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../db/prisma';
+import { isCancellableOrderStatus, isValidOrderTransition } from '../services/orderStateMachine';
+import { 
+    SIMULATION_DISCLAIMER, 
+    verifyWebhookSignature, 
+    processPaymentWebhook,
+    WebhookPayload 
+} from '../services/paymentService';
+
+// Re-export Autobook schedules handlers for backward compatibility
+export {
+    getMyAutobookSchedules as getAutobookSchedules,
+    createAutobookSchedule,
+    toggleAutobookSchedule,
+    deleteAutobookSchedule,
+    runAutobookScheduleNow as executeAutobookSchedule,
+    runAutobookScheduleNow
+} from './autobookController';
 
 export const BACKEND_KNOWN_ITEMS: Record<number, { name: string; price: number }> = {
     101: { name: 'Crispy Veg Cheese Burger', price: 85 },
@@ -90,8 +107,71 @@ export const getItemPrepTime = (itemId: number, name?: string): number => {
     return 10;
 };
 
-export const placeOrder = async (req: AuthRequest, res: Response): Promise<void> => {
-    const { shopId, items, isPreorder, pickupTime, paymentMethod } = req.body;
+/**
+ * Helper to format order output consistently
+ */
+function formatOrderResponse(order: any, maxPrepTime = 8, isDuplicate = false) {
+    const pickupToken = `TK-${1000 + (order.id % 9000)}`;
+    const estMinutes = order.estimatedMinutes || 15;
+    const estimatedReadyTime = new Date(order.orderTime.getTime() + estMinutes * 60 * 1000).toISOString();
+
+    return {
+        message: isDuplicate ? 'Order already placed (idempotent replay)' : 'Order placed successfully',
+        orderId: order.id,
+        id: order.id,
+        totalAmount: order.totalAmount,
+        total_amount: order.totalAmount,
+        pickup_token: pickupToken,
+        queue_number: order.queueNumber || 1,
+        prep_time_minutes: maxPrepTime,
+        estimated_delivery_minutes: estMinutes,
+        estimated_ready_time: estimatedReadyTime,
+        is_preorder: order.isPreorder,
+        pickup_time: order.pickupTime,
+        payment_method: order.paymentMethod,
+        isSimulated: true,
+        simulationNotice: SIMULATION_DISCLAIMER,
+        isDuplicate,
+        order: {
+            id: order.id,
+            order_id: order.id,
+            shop_id: order.shopId,
+            shop_name: order.shop?.name || 'Campus Outlet',
+            status: order.status,
+            totalAmount: order.totalAmount,
+            total_amount: order.totalAmount,
+            order_time: order.orderTime,
+            created_at: order.orderTime,
+            pickup_token: pickupToken,
+            queue_number: order.queueNumber || 1,
+            prep_time_minutes: maxPrepTime,
+            estimated_delivery_minutes: estMinutes,
+            estimated_ready_time: estimatedReadyTime,
+            is_preorder: order.isPreorder,
+            pickup_time: order.pickupTime,
+            payment_method: order.paymentMethod,
+            items: (order.items || []).map((oi: any) => ({
+                id: oi.itemId,
+                itemId: oi.itemId,
+                item_id: oi.itemId,
+                name: oi.item?.name || 'Item',
+                price: oi.priceAtOrder,
+                price_at_order: oi.priceAtOrder,
+                quantity: oi.quantity
+            }))
+        }
+    };
+}
+
+/**
+ * Place / Create Order
+ * - Atomic database transaction wrapping Order and all OrderItem records.
+ * - Idempotency support: checks idempotencyKey from header or body.
+ * - Authoritative server-side pricing from DB records.
+ * - Strict status state machine: starts at PAYMENT_PENDING (or PLACED when autoConfirmed).
+ */
+export const createOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+    const { shopId, items, isPreorder, pickupTime, paymentMethod, autoConfirm } = req.body;
     const userId = req.user?.userId;
 
     if (!userId) {
@@ -99,105 +179,118 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
         return;
     }
 
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        res.status(400).json({ error: 'Order must contain at least one item' });
+        return;
+    }
+
+    // Extract idempotency key from headers or request payload
+    const rawKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body.idempotencyKey;
+    const idempotencyKey = typeof rawKey === 'string' && rawKey.trim().length > 0 ? rawKey.trim() : null;
+
+    // STEP 1: PRE-CHECK IDEMPOTENCY KEY
+    if (idempotencyKey) {
+        const existingOrder = await prisma.order.findUnique({
+            where: { idempotencyKey },
+            include: {
+                shop: true,
+                items: { include: { item: true } },
+                payments: true
+            }
+        });
+
+        if (existingOrder) {
+            res.status(200).json(formatOrderResponse(existingOrder, 8, true));
+            return;
+        }
+    }
+
+    const targetShopId = Number(shopId);
+
     try {
-        const order = await prisma.$transaction(async (tx) => {
-            let shop = await tx.shop.findUnique({ where: { id: Number(shopId) } });
-            if (!shop && Number(shopId) >= 1 && Number(shopId) <= 9) {
-                const STALL_NAMES = [
-                    'Gazebo 1', 'Gazebo 2', 'Fresh Juices - Healthy & Tasty',
-                    'Sri Outlet', 'North Square Diner', 'Campus Bakers',
-                    'South Corner', 'Hunger Express', 'Gymkhana Food Club'
-                ];
-                const targetName = STALL_NAMES[Number(shopId) - 1];
-                shop = await tx.shop.findFirst({ where: { name: targetName } });
-            }
+        const orderResult = await prisma.$transaction(async (tx) => {
+            // Validate stall
+            const shop = await tx.shop.findUnique({ where: { id: targetShopId } });
             if (!shop) {
-                shop = await tx.shop.findFirst({ where: { status: 'ACTIVE' } });
-                if (!shop) {
-                    shop = await tx.shop.findFirst();
-                }
-                if (!shop) {
-                    let area = await tx.area.findFirst();
-                    if (!area) {
-                        area = await tx.area.create({
-                            data: { name: 'Main Campus Court', description: 'Central food court stalls' }
-                        });
-                    }
-                    shop = await tx.shop.create({
-                        data: {
-                            ownerId: userId,
-                            areaId: area.id,
-                            name: `Campus Outlet #${shopId}`,
-                            status: 'ACTIVE'
-                        }
-                    });
-                }
-            } else if (shop.status !== 'ACTIVE') {
-                shop = await tx.shop.update({
-                    where: { id: shop.id },
-                    data: { status: 'ACTIVE' }
-                });
+                throw new Error('NOT_FOUND: Stall does not exist');
+            }
+            if (shop.status !== 'ACTIVE') {
+                throw new Error('STALL_INACTIVE: This stall is currently closed and not accepting orders');
             }
 
-            let defaultCategory = await tx.category.findFirst();
-            if (!defaultCategory) {
-                defaultCategory = await tx.category.create({ data: { name: 'Specialties' } });
+            // Validate user active status
+            const customer = await tx.user.findUnique({ where: { id: userId } });
+            if (!customer || !customer.isActive) {
+                throw new Error('USER_INACTIVE: Customer account is disabled or inactive');
             }
 
-            let totalAmount = 0;
+            let calculatedTotal = 0;
             const orderItemsData = [];
             let maxPrepTime = 8;
 
+            const itemIds = items.map((i: any) => Number(i.itemId));
+            const foods = await tx.foodItem.findMany({ where: { id: { in: itemIds } } });
+            const foodMap = new Map(foods.map(f => [f.id, f]));
+
             for (const item of items) {
                 const itemIdNum = Number(item.itemId);
-                const qty = Math.max(1, Number(item.quantity) || 1);
-                let food = await tx.foodItem.findUnique({ where: { id: itemIdNum } });
+                const qty = Math.max(1, Math.min(50, Number(item.quantity) || 1));
 
-                if (!food || food.shopId !== shop.id) {
-                    const knownItem = BACKEND_KNOWN_ITEMS[itemIdNum];
-                    const fallbackName = (item.name && String(item.name).trim() && !String(item.name).startsWith('Campus Special'))
-                        ? String(item.name).trim()
-                        : (knownItem ? knownItem.name : (food ? food.name : 'Takeaway Special'));
-                    const fallbackPrice = (item.price && Number(item.price) > 0)
-                        ? Number(item.price)
-                        : (knownItem ? knownItem.price : (food && food.price > 0 ? food.price : 60));
+                // Authoritative lookup from pre-fetched map
+                const food = foodMap.get(itemIdNum);
 
-                    let existingItemInShop = await tx.foodItem.findFirst({
-                        where: { shopId: shop.id, name: fallbackName }
-                    });
+                if (!food) {
+                    throw new Error(`INVALID_ITEM: Item #${itemIdNum} does not exist`);
+                }
 
-                    if (!existingItemInShop) {
-                        existingItemInShop = await tx.foodItem.create({
-                            data: {
-                                shopId: shop.id,
-                                categoryId: food?.categoryId || defaultCategory.id,
-                                name: fallbackName,
-                                description: food?.description || 'Fresh campus meal prepared to order',
-                                price: fallbackPrice,
-                                isAvailable: true
-                            }
-                        });
-                    }
-                    food = existingItemInShop;
+                if (food.shopId !== shop.id) {
+                    throw new Error(`MISMATCHED_SHOP: Item "${food.name}" belongs to another outlet, not "${shop.name}"`);
                 }
 
                 if (!food.isAvailable) {
-                    food = await tx.foodItem.update({
-                        where: { id: food.id },
-                        data: { isAvailable: true }
-                    });
+                    throw new Error(`UNAVAILABLE: "${food.name}" is currently sold out`);
                 }
 
-                const itemPrice = (item.price && Number(item.price) > 0) ? Number(item.price) : food.price;
-                totalAmount += itemPrice * qty;
+                // Authoritative server-side price calculation with 2-decimal precision
+                let unitPrice = Math.round(food.price * 100) / 100;
+                if (food.isDynamicPricing && food.discountPercent && food.discountPercent > 0) {
+                    const orig = food.originalPrice || food.price;
+                    unitPrice = Math.max(5, Math.round(orig * (1 - food.discountPercent / 100) * 100) / 100);
+                } else if (shop.isClosingSoon && shop.closingDiscount && shop.closingDiscount > 0) {
+                    unitPrice = Math.max(5, Math.round(food.price * (1 - shop.closingDiscount / 100) * 100) / 100);
+                }
+
+                calculatedTotal = Math.round((calculatedTotal + unitPrice * qty) * 100) / 100;
+
                 orderItemsData.push({
                     itemId: food.id,
                     quantity: qty,
-                    priceAtOrder: itemPrice
+                    priceAtOrder: unitPrice
                 });
 
                 const curItemPrep = getItemPrepTime(food.id, food.name);
                 if (curItemPrep > maxPrepTime) maxPrepTime = curItemPrep;
+            }
+
+            // Rapid double-submission protection if no explicit idempotency key provided
+            if (!idempotencyKey) {
+                const recentDuplicate = await tx.order.findFirst({
+                    where: {
+                        customerId: userId,
+                        shopId: shop.id,
+                        totalAmount: calculatedTotal,
+                        orderTime: { gte: new Date(Date.now() - 4000) }
+                    },
+                    include: {
+                        shop: true,
+                        items: { include: { item: true } },
+                        payments: true
+                    }
+                });
+
+                if (recentDuplicate) {
+                    return { newOrder: recentDuplicate, maxPrepTime, isDuplicate: true };
+                }
             }
 
             // Calculate live queue for this shop
@@ -211,85 +304,80 @@ export const placeOrder = async (req: AuthRequest, res: Response): Promise<void>
             const queueWaitMinutes = activeOrdersCount * 3;
             const estimatedMinutes = maxPrepTime + queueWaitMinutes;
 
+            // Fulfillment status: default PAYMENT_PENDING unless explicitly autoConfirmed
+            const shouldAutoConfirm = Boolean(autoConfirm);
+            const initialStatus = shouldAutoConfirm ? 'PLACED' : 'PAYMENT_PENDING';
+            const paymentStatus = shouldAutoConfirm ? 'SUCCESS' : 'PENDING';
+
             const newOrder = await tx.order.create({
                 data: {
                     customerId: userId,
                     shopId: shop.id,
-                    status: 'PLACED',
-                    totalAmount,
+                    status: initialStatus,
+                    totalAmount: calculatedTotal,
                     isPreorder: Boolean(isPreorder),
                     pickupTime: pickupTime || null,
                     estimatedMinutes,
                     queueNumber,
                     paymentMethod: paymentMethod || 'ONLINE_DEMO',
+                    idempotencyKey: idempotencyKey || null,
                     items: {
                         create: orderItemsData
                     },
                     payments: {
-                        create: { amount: totalAmount, status: 'SUCCESS' }
+                        create: {
+                            amount: calculatedTotal,
+                            status: paymentStatus
+                        }
                     }
                 },
                 include: {
                     shop: true,
                     items: {
                         include: { item: true }
-                    }
+                    },
+                    payments: true
                 }
             });
 
-            return { newOrder, maxPrepTime };
+            return { newOrder, maxPrepTime, isDuplicate: false };
+        }, {
+            maxWait: 10000,
+            timeout: 30000
         });
 
-        const createdOrder = order.newOrder;
-        const pickupToken = `TK-${1000 + (createdOrder.id % 9000)}`;
-        const estMinutes = createdOrder.estimatedMinutes || 15;
-        const estimatedReadyTime = new Date(createdOrder.orderTime.getTime() + estMinutes * 60 * 1000).toISOString();
-
-        res.status(201).json({
-            message: 'Order placed',
-            orderId: createdOrder.id,
-            id: createdOrder.id,
-            totalAmount: createdOrder.totalAmount,
-            total_amount: createdOrder.totalAmount,
-            pickup_token: pickupToken,
-            queue_number: createdOrder.queueNumber || 1,
-            prep_time_minutes: order.maxPrepTime,
-            estimated_delivery_minutes: estMinutes,
-            estimated_ready_time: estimatedReadyTime,
-            is_preorder: createdOrder.isPreorder,
-            pickup_time: createdOrder.pickupTime,
-            payment_method: createdOrder.paymentMethod,
-            order: {
-                id: createdOrder.id,
-                order_id: createdOrder.id,
-                shop_id: createdOrder.shopId,
-                shop_name: createdOrder.shop?.name || 'Campus Outlet',
-                status: createdOrder.status,
-                total_amount: createdOrder.totalAmount,
-                order_time: createdOrder.orderTime,
-                created_at: createdOrder.orderTime,
-                pickup_token: pickupToken,
-                queue_number: createdOrder.queueNumber || 1,
-                prep_time_minutes: order.maxPrepTime,
-                estimated_delivery_minutes: estMinutes,
-                estimated_ready_time: estimatedReadyTime,
-                is_preorder: createdOrder.isPreorder,
-                pickup_time: createdOrder.pickupTime,
-                payment_method: createdOrder.paymentMethod,
-                items: createdOrder.items.map(oi => ({
-                    id: oi.itemId,
-                    itemId: oi.itemId,
-                    name: oi.item?.name || 'Food Item',
-                    quantity: oi.quantity,
-                    price: oi.priceAtOrder
-                }))
-            }
-        });
+        res.status(201).json(formatOrderResponse(orderResult.newOrder, orderResult.maxPrepTime, orderResult.isDuplicate));
     } catch (error: any) {
-        res.status(400).json({ error: error.message || 'Failed to place order' });
+        // Race condition: catch P2002 unique constraint violation on idempotencyKey
+        if (error.code === 'P2002' && idempotencyKey) {
+            const replayed = await prisma.order.findUnique({
+                where: { idempotencyKey },
+                include: { shop: true, items: { include: { item: true } }, payments: true }
+            });
+            if (replayed) {
+                res.status(200).json(formatOrderResponse(replayed, 8, true));
+                return;
+            }
+        }
+
+        const msg = error.message || '';
+        if (msg.startsWith('NOT_FOUND:')) {
+            res.status(404).json({ error: msg.replace('NOT_FOUND: ', '') });
+        } else if (msg.startsWith('STALL_INACTIVE:') || msg.startsWith('INVALID_ITEM:') || msg.startsWith('MISMATCHED_SHOP:') || msg.startsWith('UNAVAILABLE:') || msg.startsWith('USER_INACTIVE:')) {
+            res.status(400).json({ error: msg.split(': ')[1] || msg });
+        } else {
+            console.error('Order creation transaction error:', error);
+            res.status(500).json({ error: 'Failed to place order' });
+        }
     }
 };
 
+export const placeOrder = createOrder;
+
+/**
+ * Get My Orders
+ * Restricted strictly to the authenticated customer's own orders.
+ */
 export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.userId;
@@ -297,8 +385,48 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
 
         const orders = await prisma.order.findMany({
             where: { customerId: userId },
-            include: { shop: true, items: { include: { item: true } } },
-            orderBy: { orderTime: 'desc' }
+            select: {
+                id: true,
+                shopId: true,
+                status: true,
+                totalAmount: true,
+                orderTime: true,
+                isPreorder: true,
+                pickupTime: true,
+                estimatedMinutes: true,
+                queueNumber: true,
+                paymentMethod: true,
+                shop: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                },
+                items: {
+                    select: {
+                        id: true,
+                        itemId: true,
+                        quantity: true,
+                        priceAtOrder: true,
+                        item: {
+                            select: {
+                                id: true,
+                                name: true,
+                                price: true
+                            }
+                        }
+                    }
+                },
+                payments: {
+                    select: {
+                        id: true,
+                        amount: true,
+                        status: true,
+                        attemptTime: true
+                    }
+                }
+            },
+            orderBy: [{ orderTime: 'desc' }, { id: 'desc' }]
         });
         
         const mapped = orders.map(o => {
@@ -321,6 +449,13 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
                 is_preorder: o.isPreorder || false,
                 pickup_time: o.pickupTime || null,
                 payment_method: o.paymentMethod || 'ONLINE_DEMO',
+                isSimulated: true,
+                payments: o.payments.map(p => ({
+                    id: p.id,
+                    amount: p.amount,
+                    status: p.status,
+                    time: p.attemptTime
+                })),
                 items: o.items.map(oi => ({
                     id: oi.itemId,
                     itemId: oi.itemId,
@@ -337,6 +472,10 @@ export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void
     }
 };
 
+/**
+ * Get Order Details by ID
+ * Enforces ownership: only customer owner, stall staff, or admin can view details.
+ */
 export const getOrderById = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.userId;
@@ -345,13 +484,23 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
         const { orderId } = req.params;
         const oId = Number(orderId);
 
-        const order = await prisma.order.findFirst({
-            where: { id: oId, customerId: userId },
+        const order = await prisma.order.findUnique({
+            where: { id: oId },
             include: { items: { include: { item: true } }, shop: true, payments: true }
         });
 
         if (!order) {
             res.status(404).json({ error: 'Order not found' });
+            return;
+        }
+
+        // Ownership and authorization guard
+        const isCustomer = order.customerId === userId;
+        const isAdmin = req.user?.role === 'ADMIN';
+        const isStaffForShop = (req.user?.role === 'STAFF' || req.user?.role === 'OWNER') && req.user?.shopId === order.shopId;
+
+        if (!isCustomer && !isAdmin && !isStaffForShop) {
+            res.status(403).json({ error: 'Forbidden: You do not have permission to view this order' });
             return;
         }
 
@@ -365,8 +514,8 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
             shop_id: order.shopId,
             shop_name: order.shop?.name || 'Campus Outlet',
             status: order.status,
-            total_amount: order.totalAmount,
             totalAmount: order.totalAmount,
+            total_amount: order.totalAmount,
             order_time: order.orderTime,
             created_at: order.orderTime,
             pickup_token: pickupToken,
@@ -376,6 +525,8 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
             is_preorder: order.isPreorder || false,
             pickup_time: order.pickupTime || null,
             payment_method: order.paymentMethod || 'ONLINE_DEMO',
+            isSimulated: true,
+            simulationNotice: SIMULATION_DISCLAIMER,
             order: {
                 id: order.id,
                 order_id: order.id,
@@ -412,6 +563,11 @@ export const getOrderById = async (req: AuthRequest, res: Response): Promise<voi
     }
 };
 
+/**
+ * Customer Self-Service Order Cancellation
+ * Strictly allows cancellation ONLY if status is PAYMENT_PENDING or PLACED.
+ * Rejects cancellation if cooking has commenced (PREPARING) or if already READY/COMPLETED.
+ */
 export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.userId;
@@ -420,30 +576,69 @@ export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void
         const { orderId } = req.params;
         const oId = Number(orderId);
 
-        const order = await prisma.order.findFirst({
-            where: { id: oId, customerId: userId }
+        const order = await prisma.order.findUnique({
+            where: { id: oId },
+            include: { payments: true }
         });
 
         if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
 
-        // Customers can only cancel before preparation starts
-        const cancellable = ['PAYMENT_PENDING', 'PLACED'];
-        if (!cancellable.includes(order.status)) {
-            res.status(400).json({ error: `Cannot cancel order in ${order.status} state. Only PAYMENT_PENDING or PLACED orders can be cancelled.` });
+        if (order.customerId !== userId && req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: 'Forbidden: You can only cancel your own orders' });
             return;
         }
 
-        const updated = await prisma.order.update({
-            where: { id: oId },
-            data: { status: 'CANCELLED' }
+        // Strict state machine guard: only PAYMENT_PENDING or PLACED
+        if (!isCancellableOrderStatus(order.status)) {
+            res.status(400).json({
+                error: `Cannot cancel order in ${order.status} state. Only orders in PAYMENT_PENDING or PLACED can be cancelled.`
+            });
+            return;
+        }
+
+        const updated = await prisma.$transaction(async (tx) => {
+            // Update order status
+            const o = await tx.order.update({
+                where: { id: oId },
+                data: { status: 'CANCELLED' }
+            });
+
+            // Update associated payments: PENDING becomes CANCELLED; SUCCESS becomes REFUNDED
+            const pendingPayment = order.payments.find(p => p.status === 'PENDING');
+            if (pendingPayment) {
+                await tx.paymentAttempt.update({
+                    where: { id: pendingPayment.id },
+                    data: { status: 'CANCELLED' }
+                });
+            } else {
+                const successPayment = order.payments.find(p => p.status === 'SUCCESS');
+                if (successPayment) {
+                    await tx.paymentAttempt.update({
+                        where: { id: successPayment.id },
+                        data: { status: 'REFUNDED' }
+                    });
+                }
+            }
+
+            return o;
         });
 
-        res.json({ message: 'Order cancelled successfully', orderId: updated.id, status: updated.status });
+        res.json({
+            message: 'Order cancelled successfully',
+            orderId: updated.id,
+            status: updated.status,
+            order: updated,
+            isSimulated: true
+        });
     } catch (error: any) {
         res.status(500).json({ error: error.message || 'Failed to cancel order' });
     }
 };
 
+/**
+ * Confirm Payment (State Transition from PAYMENT_PENDING to PLACED)
+ * Idempotent: safe replay if already placed.
+ */
 export const confirmPayment = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.userId;
@@ -452,27 +647,41 @@ export const confirmPayment = async (req: AuthRequest, res: Response): Promise<v
         const { orderId } = req.params;
         const oId = Number(orderId);
 
-        const order = await prisma.order.findFirst({
-            where: { id: oId, customerId: userId }
+        const order = await prisma.order.findUnique({
+            where: { id: oId }
         });
 
         if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
 
+        if (order.customerId !== userId && req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: 'Forbidden: You can only confirm payment for your own orders' });
+            return;
+        }
+
+        // Idempotency: if already PLACED, safely return success
         if (order.status === 'PLACED') {
-            res.json({ message: 'Order is already PLACED', orderId: order.id, status: 'PLACED' });
+            res.json({
+                message: 'Order is already PLACED',
+                orderId: order.id,
+                status: 'PLACED',
+                isDuplicate: true,
+                isSimulated: true
+            });
             return;
         }
 
         if (order.status !== 'PAYMENT_PENDING') {
-            res.status(400).json({ error: `Order is not in PAYMENT_PENDING state (current: ${order.status})` });
+            res.status(400).json({
+                error: `Order is not in PAYMENT_PENDING state (current: ${order.status})`
+            });
             return;
         }
 
-        // Simulate payment confirmation
         await prisma.$transaction(async (tx) => {
             const payment = await tx.paymentAttempt.findFirst({
                 where: { orderId: oId, status: 'PENDING' }
             });
+
             if (payment) {
                 await tx.paymentAttempt.update({
                     where: { id: payment.id },
@@ -488,22 +697,70 @@ export const confirmPayment = async (req: AuthRequest, res: Response): Promise<v
                 });
             }
 
-            // Move order to PLACED
             await tx.order.update({
                 where: { id: oId },
                 data: { status: 'PLACED' }
             });
         });
 
-        res.json({ message: 'Payment confirmed. Order is now PLACED.', orderId: oId, status: 'PLACED' });
+        res.json({
+            message: 'Payment confirmed. Order is now PLACED.',
+            orderId: oId,
+            status: 'PLACED',
+            isSimulated: true,
+            simulationNotice: SIMULATION_DISCLAIMER
+        });
     } catch (error: any) {
         res.status(500).json({ error: error.message || 'Failed to confirm payment' });
     }
 };
 
-// ==========================================
-// LIVE QUEUE & TIME ESTIMATE ENDPOINT
-// ==========================================
+/**
+ * Payment Webhook Endpoint
+ * Supports simulated signature verification and idempotent order/payment state processing.
+ */
+export const handlePaymentWebhook = async (req: any, res: Response): Promise<void> => {
+    try {
+        const signature = (
+            req.headers['x-razorpay-signature'] || 
+            req.headers['x-webhook-signature'] || 
+            req.headers['webhook-signature']
+        ) as string;
+
+        const payloadStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+
+        // Verify simulated signature
+        const isValid = verifyWebhookSignature(payloadStr, signature);
+        if (!isValid) {
+            res.status(401).json({ error: 'Invalid webhook signature' });
+            return;
+        }
+
+        const payload: WebhookPayload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+
+        if (!payload.event || !payload.orderId) {
+            res.status(400).json({ error: 'Webhook payload missing required event or orderId' });
+            return;
+        }
+
+        const result = await processPaymentWebhook(payload);
+        res.status(200).json(result);
+    } catch (error: any) {
+        const msg = error.message || '';
+        if (msg.startsWith('NOT_FOUND:')) {
+            res.status(404).json({ error: msg.replace('NOT_FOUND: ', '') });
+        } else if (msg.startsWith('UNSUPPORTED_EVENT:')) {
+            res.status(400).json({ error: msg.replace('UNSUPPORTED_EVENT: ', '') });
+        } else {
+            console.error('Webhook processing error:', error);
+            res.status(500).json({ error: 'Internal webhook error' });
+        }
+    }
+};
+
+/**
+ * Queue & Estimation per Shop
+ */
 export const getShopQueueEstimate = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const shopId = Number(req.params.shopId);
@@ -530,120 +787,5 @@ export const getShopQueueEstimate = async (req: AuthRequest, res: Response): Pro
         });
     } catch (error: any) {
         res.status(500).json({ error: error.message || 'Failed to fetch queue estimate' });
-    }
-};
-
-// ==========================================
-// DAILY AUTOBOOK SCHEDULES CONTROLLERS
-// ==========================================
-export const getAutobookSchedules = async (req: AuthRequest, res: Response): Promise<void> => {
-    try {
-        const userId = req.user?.userId;
-        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
-
-        const schedules = await prisma.autobookSchedule.findMany({
-            where: { userId },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        const shops = await prisma.shop.findMany();
-        const items = await prisma.foodItem.findMany();
-
-        const shopMap = new Map(shops.map(s => [s.id, s.name]));
-        const itemMap = new Map(items.map(i => [i.id, i]));
-
-        const enriched = schedules.map(s => {
-            const item = itemMap.get(s.itemId);
-            const known = BACKEND_KNOWN_ITEMS[s.itemId];
-            const itemName = item?.name || known?.name || `Food Item #${s.itemId}`;
-            const itemPrice = item?.price || known?.price || 50;
-            return {
-                id: s.id,
-                userId: s.userId,
-                shopId: s.shopId,
-                shopName: shopMap.get(s.shopId) || `Campus Outlet #${s.shopId}`,
-                itemId: s.itemId,
-                itemName,
-                price: itemPrice,
-                quantity: s.quantity,
-                scheduledTime: s.scheduledTime,
-                isActive: s.isActive,
-                lastRunDate: s.lastRunDate,
-                createdAt: s.createdAt
-            };
-        });
-
-        res.json(enriched);
-    } catch (error: any) {
-        res.status(500).json({ error: error.message || 'Failed to fetch autobook schedules' });
-    }
-};
-
-export const createAutobookSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
-    try {
-        const userId = req.user?.userId;
-        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
-
-        const { shopId, itemId, quantity, scheduledTime, isActive } = req.body;
-
-        const schedule = await prisma.autobookSchedule.create({
-            data: {
-                userId,
-                shopId: Number(shopId),
-                itemId: Number(itemId),
-                quantity: Number(quantity) || 1,
-                scheduledTime: String(scheduledTime),
-                isActive: isActive !== undefined ? Boolean(isActive) : true
-            }
-        });
-
-        res.status(201).json({
-            message: 'Daily autobook schedule registered successfully',
-            schedule
-        });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message || 'Failed to create autobook schedule' });
-    }
-};
-
-export const toggleAutobookSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
-    try {
-        const userId = req.user?.userId;
-        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
-
-        const scheduleId = Number(req.params.scheduleId);
-        const existing = await prisma.autobookSchedule.findFirst({
-            where: { id: scheduleId, userId }
-        });
-
-        if (!existing) {
-            res.status(404).json({ error: 'Schedule not found' });
-            return;
-        }
-
-        const updated = await prisma.autobookSchedule.update({
-            where: { id: scheduleId },
-            data: { isActive: !existing.isActive }
-        });
-
-        res.json({ message: 'Autobook schedule status updated', schedule: updated });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message || 'Failed to toggle autobook schedule' });
-    }
-};
-
-export const deleteAutobookSchedule = async (req: AuthRequest, res: Response): Promise<void> => {
-    try {
-        const userId = req.user?.userId;
-        if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
-
-        const scheduleId = Number(req.params.scheduleId);
-        await prisma.autobookSchedule.deleteMany({
-            where: { id: scheduleId, userId }
-        });
-
-        res.json({ message: 'Autobook schedule removed' });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message || 'Failed to delete autobook schedule' });
     }
 };

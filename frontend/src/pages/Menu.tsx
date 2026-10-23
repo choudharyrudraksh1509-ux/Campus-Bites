@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2, Trash2, Repeat, Calendar, Lock, Timer, Flame, Tag } from 'lucide-react';
+import { Plus, Minus, ShoppingBag, Search, Clock, CheckCircle2, Trash2, Repeat, Calendar, Lock, Timer, Flame, Tag, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import api from '../services/api';
 import orderService from '../services/orderService';
 import SingleOutletModal from '../components/SingleOutletModal';
@@ -199,6 +199,12 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isDemoModeActive, setIsDemoModeActive] = useState<boolean>(false);
+
+  const isDevDemoAllowed = Boolean(
+    import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true'
+  );
   
   // Cart state stored per outlet
   const [cart, setCart] = useState<{
@@ -257,7 +263,11 @@ export default function Menu() {
     };
   }, []);
 
-  useEffect(() => {
+  const fetchMenu = () => {
+    setLoading(true);
+    setError(null);
+    setIsDemoModeActive(false);
+
     api.get(`/shops/${sId}/menu`)
       .then(res => {
         if (res.data && res.data.length > 0) {
@@ -297,13 +307,25 @@ export default function Menu() {
               is_veg: item.is_veg !== undefined ? item.is_veg : !item.name.toLowerCase().includes('chicken') && !item.name.toLowerCase().includes('egg')
             };
           }));
-          setShopName(res.data[0]?.shop?.name || FULL_MOCK_MENUS[sId]?.shop_name || 'Campus Outlet');
+          setShopName(res.data[0]?.shop?.name || 'Campus Outlet');
         } else {
-          loadMockData();
+          if (isDevDemoAllowed) {
+            loadMockData();
+            setIsDemoModeActive(true);
+          } else {
+            setMenu([]);
+          }
         }
       })
-      .catch(() => {
-        loadMockData();
+      .catch((err) => {
+        console.error('Failed to load menu from API:', err);
+        if (isDevDemoAllowed) {
+          loadMockData();
+          setIsDemoModeActive(true);
+        } else {
+          setMenu([]);
+          setError(err.response?.data?.error || 'Unable to load menu from the outlet server. Please check your connection and retry.');
+        }
       })
       .finally(() => setLoading(false));
 
@@ -314,6 +336,7 @@ export default function Menu() {
           const discount = res.data.closingDiscount || 0;
           if (res.data.isClosingSoon !== undefined) setIsClosingSoon(closing);
           if (res.data.closingDiscount) setClosingDiscount(discount);
+          if (res.data.name) setShopName(res.data.name);
 
           if (closing && discount > 0) {
             setMenu(prev => prev.map(m => {
@@ -334,6 +357,10 @@ export default function Menu() {
       })
       .catch(() => {});
     orderService.getShopQueueEstimate(sId).then(est => { if (est) setShopQueueEst(est); }).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchMenu();
   }, [sId]);
 
   const loadMockData = () => {
@@ -512,6 +539,22 @@ export default function Menu() {
         </div>
       </div>
 
+      {/* Explicit Dev Demo Mode Banner */}
+      {isDemoModeActive && (
+        <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 flex items-center justify-between text-amber-200">
+          <div className="flex items-center space-x-3">
+            <Sparkles size={20} className="text-amber-400 shrink-0" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider">Demo Menu Mode Active</p>
+              <p className="text-xs text-amber-200/80">Using fallback mock menu items because live menu API was unavailable in dev.</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-amber-500/20 border border-amber-500/50 px-2.5 py-1 rounded-full font-mono uppercase">
+            DEMO MENU
+          </span>
+        </div>
+      )}
+
       {/* Closing Clearance Sale Banner */}
       {isClosingSoon && closingDiscount > 0 && (
         <div className="flex items-center gap-3 bg-gradient-to-r from-red-900/60 to-orange-900/40 border border-red-500/50 rounded-2xl px-4 py-3 shadow-lg">
@@ -566,6 +609,29 @@ export default function Menu() {
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="h-24 bg-[#4C1829]/30 animate-pulse rounded-2xl border border-[#930E36]/30"></div>
               ))}
+            </div>
+          ) : error ? (
+            <div className="bg-[#4C1829]/70 border border-red-500/50 rounded-3xl p-8 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
+                <AlertCircle size={28} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white">Menu Unavailable</h3>
+                <p className="text-xs text-white/70">{error}</p>
+              </div>
+              <button
+                onClick={fetchMenu}
+                className="inline-flex items-center space-x-2 bg-white text-[#4C1829] px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider hover:bg-white/90 transition-all shadow-lg"
+              >
+                <RefreshCw size={14} />
+                <span>Retry Connection</span>
+              </button>
+            </div>
+          ) : filteredMenu.length === 0 ? (
+            <div className="bg-[#1D1D21]/80 border border-white/10 rounded-3xl p-10 text-center space-y-3">
+              <ShoppingBag size={36} className="text-white/40 mx-auto" />
+              <h3 className="text-base font-bold text-white">No Items Available</h3>
+              <p className="text-xs text-white/60">No items found matching the selected category or search query.</p>
             </div>
           ) : (
             <>

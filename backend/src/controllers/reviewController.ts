@@ -126,42 +126,46 @@ export const getShopReviews = async (req: Request, res: Response): Promise<void>
     try {
         const { shopId } = req.params;
         const sId = Number(shopId);
+        const isDevDemoAllowed = process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE === 'true';
 
         let reviews: StoredReview[] = [];
 
-        try {
-            const dbReviews = await prisma.review.findMany({
-                where: { shopId: sId },
-                include: { customer: true },
-                orderBy: { createdAt: 'desc' }
-            });
+        const dbReviews = await prisma.review.findMany({
+            where: { shopId: sId },
+            select: {
+                id: true,
+                orderId: true,
+                customerId: true,
+                shopId: true,
+                rating: true,
+                comment: true,
+                createdAt: true,
+                customer: {
+                    select: {
+                        fullName: true
+                    }
+                }
+            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
+        });
 
-            if (dbReviews && dbReviews.length > 0) {
-                reviews = dbReviews.map(r => ({
-                    id: r.id,
-                    orderId: r.orderId,
-                    customerId: r.customerId,
-                    shopId: r.shopId,
-                    rating: r.rating,
-                    comment: r.comment,
-                    createdAt: r.createdAt.toISOString(),
-                    reviewer_name: r.customer?.fullName || 'Campus Diner'
-                }));
-            }
-        } catch (dbErr) {
-            console.warn('Prisma getShopReviews query error, using in-memory store:', dbErr);
+        if (dbReviews && dbReviews.length > 0) {
+            reviews = dbReviews.map(r => ({
+                id: r.id,
+                orderId: r.orderId,
+                customerId: r.customerId,
+                shopId: r.shopId,
+                rating: r.rating,
+                comment: r.comment,
+                createdAt: r.createdAt.toISOString(),
+                reviewer_name: r.customer?.fullName || 'Campus Diner'
+            }));
+        } else if (isDevDemoAllowed) {
+            // Only in explicit development demo mode
+            reviews = IN_MEMORY_REVIEWS[sId] ? [...IN_MEMORY_REVIEWS[sId]] : [];
         }
 
-        // Merge with in-memory reviews if any were newly added or if DB is empty
-        const memoryList = IN_MEMORY_REVIEWS[sId] || [];
-        const existingIds = new Set(reviews.map(r => r.id));
-        for (const mr of memoryList) {
-            if (!existingIds.has(mr.id)) {
-                reviews.push(mr);
-            }
-        }
-
-        // Calculate rating breakdown and average rating
+        // Calculate rating breakdown and average rating from authoritative reviews
         const ratingBreakdown: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
         let sumRating = 0;
 
@@ -172,7 +176,7 @@ export const getShopReviews = async (req: Request, res: Response): Promise<void>
         }
 
         const totalReviews = reviews.length;
-        const averageRating = totalReviews > 0 ? Number((sumRating / totalReviews).toFixed(1)) : 4.8;
+        const averageRating = totalReviews > 0 ? Number((sumRating / totalReviews).toFixed(1)) : 0;
 
         res.json({
             shopId: sId,
@@ -190,50 +194,58 @@ export const getShopItemReviews = async (req: Request, res: Response): Promise<v
     try {
         const { shopId } = req.params;
         const sId = Number(shopId);
+        const isDevDemoAllowed = process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE === 'true';
 
-        // Check if mock item ratings exist
-        const defaultItems = MOCK_ITEM_RATINGS[sId] || [];
+        const dbItems = await prisma.foodItem.findMany({
+            where: { shopId: sId, isAvailable: true },
+            include: { category: true }
+        });
 
-        try {
-            const dbItems = await prisma.foodItem.findMany({
-                where: { shopId: sId, isAvailable: true },
-                include: { category: true }
+        if (dbItems && dbItems.length > 0) {
+            const defaultItems = isDevDemoAllowed ? (MOCK_ITEM_RATINGS[sId] || []) : [];
+            const mapped = dbItems.map(item => {
+                const match = defaultItems.find(d => d.itemId === item.id || d.name.toLowerCase() === item.name.toLowerCase());
+                return {
+                    itemId: item.id,
+                    shopId: item.shopId,
+                    name: item.name,
+                    category: item.category.name,
+                    price: item.price,
+                    rating: match?.rating || 0,
+                    reviewCount: match?.reviewCount || 0,
+                    popularTag: match?.popularTag || (item.price < 50 ? 'Popular' : undefined),
+                    is_veg: match?.is_veg !== undefined ? match.is_veg : !item.name.toLowerCase().includes('chicken') && !item.name.toLowerCase().includes('egg'),
+                    recentReviews: match?.recentReviews || []
+                };
             });
-
-            if (dbItems && dbItems.length > 0) {
-                const mapped = dbItems.map(item => {
-                    const match = defaultItems.find(d => d.itemId === item.id || d.name.toLowerCase() === item.name.toLowerCase());
-                    return {
-                        itemId: item.id,
-                        shopId: item.shopId,
-                        name: item.name,
-                        category: item.category.name,
-                        price: item.price,
-                        rating: match?.rating || 4.7,
-                        reviewCount: match?.reviewCount || 15,
-                        popularTag: match?.popularTag || (item.price < 50 ? 'Popular' : 'Specialty'),
-                        is_veg: match?.is_veg !== undefined ? match.is_veg : !item.name.toLowerCase().includes('chicken') && !item.name.toLowerCase().includes('egg'),
-                        recentReviews: match?.recentReviews || [
-                            { rating: 5, comment: `Delicious and fresh ${item.name}!`, reviewerName: 'Campus Student', date: 'Recently' }
-                        ]
-                    };
-                });
-                res.json(mapped);
-                return;
-            }
-        } catch (dbErr) {
-            console.warn('Prisma getShopItemReviews error, returning fallback:', dbErr);
+            res.json(mapped);
+            return;
         }
 
-        res.json(defaultItems);
+        if (isDevDemoAllowed) {
+            res.json(MOCK_ITEM_RATINGS[sId] || []);
+            return;
+        }
+
+        res.json([]);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch item ratings' });
     }
 };
 
+/**
+ * Submit Review
+ * Hardened to verify authentic completed customer purchases.
+ * Zero synthetic order injection.
+ */
 export const addReview = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const customerId = req.user?.userId || 1;
+        const customerId = req.user?.userId;
+        if (!customerId) {
+            res.status(401).json({ error: 'Authentication required to submit reviews' });
+            return;
+        }
+
         const shopId = Number(req.body.shopId || req.params.shopId);
         const rating = Number(req.body.rating);
         const comment = req.body.comment ? String(req.body.comment).trim() : '';
@@ -249,76 +261,90 @@ export const addReview = async (req: AuthRequest, res: Response): Promise<void> 
             return;
         }
 
-        let reviewRecord: any = null;
+        let targetOrderId = orderIdParam;
 
-        try {
-            let targetOrderId = orderIdParam;
+        if (targetOrderId) {
+            const verifiedOrder = await prisma.order.findUnique({
+                where: { id: targetOrderId }
+            });
 
-            if (!targetOrderId) {
-                // Find unreviewed order for this shop & customer
-                const unreviewed = await prisma.order.findFirst({
-                    where: { customerId, shopId, reviews: { none: {} } },
-                    orderBy: { orderTime: 'desc' }
-                });
-
-                if (unreviewed) {
-                    targetOrderId = unreviewed.id;
-                } else {
-                    // Create an auto-completed takeaway transaction record so foreign key is satisfied
-                    const defaultItem = await prisma.foodItem.findFirst({ where: { shopId } });
-                    const autoOrder = await prisma.order.create({
-                        data: {
-                            customerId,
-                            shopId,
-                            status: 'COMPLETED',
-                            totalAmount: defaultItem ? defaultItem.price : 50,
-                            ...(defaultItem ? {
-                                items: {
-                                    create: [{ itemId: defaultItem.id, quantity: 1, priceAtOrder: defaultItem.price }]
-                                }
-                            } : {})
-                        }
-                    });
-                    targetOrderId = autoOrder.id;
-                }
+            if (!verifiedOrder) {
+                res.status(404).json({ error: 'Referenced order not found' });
+                return;
             }
 
-            reviewRecord = await prisma.review.create({
-                data: {
-                    orderId: targetOrderId,
+            if (verifiedOrder.customerId !== customerId) {
+                res.status(403).json({ error: 'Forbidden: You cannot review an order belonging to another customer' });
+                return;
+            }
+
+            if (verifiedOrder.shopId !== shopId) {
+                res.status(400).json({ error: 'Order does not belong to this stall' });
+                return;
+            }
+
+            if (verifiedOrder.status !== 'COMPLETED') {
+                res.status(400).json({ error: 'You can only review an order once it has been completed' });
+                return;
+            }
+
+            const existingReview = await prisma.review.findUnique({
+                where: { orderId: targetOrderId }
+            });
+            if (existingReview) {
+                res.status(400).json({ error: 'This order has already been reviewed' });
+                return;
+            }
+        } else {
+            // Find a completed order for this shop & customer that has not yet been reviewed
+            const unreviewedOrder = await prisma.order.findFirst({
+                where: {
                     customerId,
                     shopId,
-                    rating,
-                    comment: comment || null
+                    status: 'COMPLETED',
+                    reviews: { none: {} }
                 },
-                include: { customer: true }
+                orderBy: { orderTime: 'desc' }
             });
-        } catch (dbErr) {
-            console.warn('Prisma review create fallback to in-memory store:', dbErr);
+
+            if (!unreviewedOrder) {
+                res.status(403).json({
+                    error: 'Verified purchase required: You can only submit a review after completing an order with this stall.'
+                });
+                return;
+            }
+
+            targetOrderId = unreviewedOrder.id;
         }
 
+        const reviewRecord = await prisma.review.create({
+            data: {
+                orderId: targetOrderId,
+                customerId,
+                shopId,
+                rating,
+                comment: comment || null
+            },
+            include: { customer: true }
+        });
+
         const newReview: StoredReview = {
-            id: reviewRecord?.id || Date.now(),
-            orderId: reviewRecord?.orderId || orderIdParam || Math.floor(1000 + Math.random() * 9000),
+            id: reviewRecord.id,
+            orderId: reviewRecord.orderId,
             customerId,
             shopId,
             rating,
             comment: comment || null,
-            createdAt: reviewRecord?.createdAt?.toISOString?.() || new Date().toISOString(),
-            reviewer_name: reviewRecord?.customer?.fullName || (req.user as any)?.name || 'Campus Diner'
+            createdAt: reviewRecord.createdAt.toISOString(),
+            reviewer_name: reviewRecord.customer?.fullName || 'Campus Customer'
         };
-
-        if (!IN_MEMORY_REVIEWS[shopId]) {
-            IN_MEMORY_REVIEWS[shopId] = [];
-        }
-        IN_MEMORY_REVIEWS[shopId].unshift(newReview);
 
         res.status(201).json({
             message: 'Review added successfully',
             review: newReview
         });
     } catch (error: any) {
+        console.error('Add review error:', error);
         res.status(500).json({ error: 'Failed to add review' });
     }
 };
-

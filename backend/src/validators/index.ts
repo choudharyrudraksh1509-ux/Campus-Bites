@@ -22,9 +22,9 @@ export const validateRequest = (schema: ZodSchema) =>
 
 export const registerSchema = z.object({
   body: z.object({
-    fullName: z.string().min(1, 'Name cannot be empty').max(120),
-    email: z.string().email('Invalid email address'),
-    password: z.string().min(1, 'Password cannot be empty').max(255),
+    fullName: z.string().min(2, 'Name must be at least 2 characters').max(120),
+    email: z.string().email('Invalid email address').max(150),
+    password: z.string().min(6, 'Password must be at least 6 characters').max(128),
     phone: z.string().max(20).optional().refine(val => {
       if (!val || !val.trim()) return true;
       const clean = val.trim().replace(/[\s\-\(\)]/g, '');
@@ -34,40 +34,70 @@ export const registerSchema = z.object({
     }, {
       message: 'Please enter a valid phone number (e.g. 9876543210)'
     }),
-    role: z.enum(['CUSTOMER', 'STAFF', 'OWNER']).default('CUSTOMER')
+    // Public registration is restricted to CUSTOMER. Privilege elevation requires admin.
+    role: z.literal('CUSTOMER').default('CUSTOMER').optional()
   })
 });
 
 export const loginSchema = z.object({
   body: z.object({
-    email: z.string().min(1, 'Email or Staff ID is required'),
-    password: z.string().min(1, 'Password cannot be empty'),
-    shopId: z.union([z.number(), z.string()]).optional()
+    email: z.string().min(1, 'Email or Staff ID is required').max(150),
+    password: z.string().min(1, 'Password cannot be empty').max(128),
+    shopId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]).optional()
   })
 });
 
 export const placeOrderSchema = z.object({
   body: z.object({
-    shopId: z.union([z.number(), z.string().transform(v => Number(v))]),
+    shopId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
     items: z.array(z.object({
-      itemId: z.union([z.number(), z.string().transform(v => Number(v))]),
-      quantity: z.union([z.number(), z.string().transform(v => Number(v))]),
-      name: z.string().optional(),
-      price: z.number().optional()
-    })).min(1),
+      itemId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
+      quantity: z.union([z.number().int().min(1).max(50), z.string().regex(/^\d+$/).transform(Number)]).refine(
+        q => Number(q) >= 1 && Number(q) <= 50,
+        { message: 'Quantity must be between 1 and 50' }
+      )
+    })).min(1, 'Order must contain at least one item').max(30, 'Cannot order more than 30 distinct items'),
     isPreorder: z.boolean().optional(),
-    pickupTime: z.string().optional(),
-    paymentMethod: z.string().optional(),
-    notes: z.string().optional()
-  })
+    pickupTime: z.string().max(30).optional(),
+    paymentMethod: z.string().max(50).optional(),
+    idempotencyKey: z.string().max(128).optional(),
+    autoConfirm: z.boolean().optional(),
+    notes: z.string().max(250).optional()
+  }).passthrough()
 });
 
 export const autobookScheduleSchema = z.object({
   body: z.object({
-    shopId: z.union([z.number(), z.string().transform(v => Number(v))]),
-    itemId: z.union([z.number(), z.string().transform(v => Number(v))]),
-    quantity: z.union([z.number(), z.string().transform(v => Number(v))]).optional().default(1),
-    scheduledTime: z.string().min(1, 'Scheduled daily time is required'),
+    shopId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
+    itemId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
+    quantity: z.union([z.number().int().min(1).max(20), z.string().regex(/^\d+$/).transform(Number)]).optional().default(1),
+    scheduledTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Scheduled time must be in HH:mm 24-hour format'),
     isActive: z.boolean().optional().default(true)
+  })
+});
+
+export const reviewSchema = z.object({
+  body: z.object({
+    shopId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
+    rating: z.number().int().min(1, 'Rating must be at least 1').max(5, 'Rating cannot exceed 5'),
+    comment: z.string().max(500, 'Comment cannot exceed 500 characters').optional(),
+    orderId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]).optional()
+  })
+});
+
+export const updateOrderStatusSchema = z.object({
+  body: z.object({
+    status: z.enum(['PLACED', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED', 'PAYMENT_PENDING', 'PAYMENT_FAILED'] as const)
+  })
+});
+
+export const menuItemSchema = z.object({
+  body: z.object({
+    shopId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]).optional(),
+    categoryId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
+    name: z.string().min(1, 'Item name is required').max(100),
+    description: z.string().max(300).optional(),
+    price: z.number().positive('Price must be greater than 0'),
+    isAvailable: z.boolean().optional().default(true)
   })
 });

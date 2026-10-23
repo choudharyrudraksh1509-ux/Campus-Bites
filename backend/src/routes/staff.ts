@@ -13,20 +13,24 @@ import {
     toggleClosingClearance,
     toggleItemDynamicPricing
 } from '../controllers/staffController';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, requireStaffOrAdmin } from '../middleware/auth';
+import { validateRequest, updateOrderStatusSchema, menuItemSchema } from '../validators';
 
 const router = Router();
+
+// Strictly require authentication and staff/owner/admin role for all staff routes
 router.use(authenticateToken);
+router.use(requireStaffOrAdmin);
 
 // Order Management
 router.get('/orders', getStaffOrders);
 router.get('/orders/history', getStaffOrderHistory);
-router.patch('/orders/:orderId/status', updateOrderStatus);
-router.put('/orders/:orderId/status', updateOrderStatus);
+router.patch('/orders/:orderId/status', validateRequest(updateOrderStatusSchema), updateOrderStatus);
+router.put('/orders/:orderId/status', validateRequest(updateOrderStatusSchema), updateOrderStatus);
 
 // Stall Menu Management
 router.get('/menu', getStaffMenu);
-router.post('/menu', addStaffMenuItem);
+router.post('/menu', validateRequest(menuItemSchema), addStaffMenuItem);
 router.put('/menu/:itemId', updateStaffMenuItem);
 router.patch('/menu/:itemId', updateStaffMenuItem);
 router.delete('/menu/:itemId', deleteStaffMenuItem);

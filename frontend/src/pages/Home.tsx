@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Star, Clock, MessageSquare, Flame } from 'lucide-react';
+import { Store, Star, Clock, MessageSquare, Flame, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import api from '../services/api';
 import ReviewsModal from '../components/ReviewsModal';
 
@@ -39,12 +39,22 @@ export default function Home() {
   const [selectedComplex, setSelectedComplex] = useState<string>('ALL');
   const [selectedReviewShop, setSelectedReviewShop] = useState<Shop | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isDemoModeActive, setIsDemoModeActive] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const isDevDemoAllowed = Boolean(
+    import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === 'true'
+  );
+
+  const fetchShops = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    setIsDemoModeActive(false);
+
     api.get('/shops')
       .then(res => {
-        if (res.data && res.data.length > 0) {
+        if (res.data && Array.isArray(res.data) && res.data.length > 0) {
           const enriched = res.data.map((s: any) => {
             const match = MOCK_CAMPUS_SHOPS.find(m => m.name.toLowerCase() === s.name.toLowerCase());
             return {
@@ -57,14 +67,31 @@ export default function Home() {
           });
           setShops(enriched);
         } else {
-          setShops(MOCK_CAMPUS_SHOPS);
+          // Empty response from backend database
+          if (isDevDemoAllowed) {
+            setShops(MOCK_CAMPUS_SHOPS);
+            setIsDemoModeActive(true);
+          } else {
+            setShops([]);
+          }
         }
       })
-      .catch(() => {
-        setShops(MOCK_CAMPUS_SHOPS);
+      .catch(err => {
+        console.error('Failed to load campus shops from API:', err);
+        if (isDevDemoAllowed) {
+          setShops(MOCK_CAMPUS_SHOPS);
+          setIsDemoModeActive(true);
+        } else {
+          setShops([]);
+          setError(err.response?.data?.error || 'Unable to connect to campus outlets. Please verify your connection.');
+        }
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [isDevDemoAllowed]);
+
+  useEffect(() => {
+    fetchShops();
+  }, [fetchShops]);
 
   const filteredShops = shops.filter(shop => {
     if (selectedComplex === 'ALL') return true;
@@ -78,6 +105,22 @@ export default function Home() {
   return (
     <div className="space-y-6 sm:space-y-8 fade-in pb-[calc(max(env(safe-area-inset-bottom,0px),8px)+4.5rem)] md:pb-12 max-w-6xl mx-auto">
       
+      {/* Explicit Dev Demo Mode Banner */}
+      {isDemoModeActive && (
+        <div className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-4 flex items-center justify-between text-amber-200">
+          <div className="flex items-center space-x-3">
+            <Sparkles size={20} className="text-amber-400 shrink-0" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider">Development Demo Mode Active</p>
+              <p className="text-xs text-amber-200/80">Using fallback mock outlets because live backend was unavailable in dev.</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-amber-500/20 border border-amber-500/50 px-2.5 py-1 rounded-full font-mono uppercase">
+            VITE_DEMO_MODE=true
+          </span>
+        </div>
+      )}
+
       {/* Header Title Section */}
       <div className="space-y-5">
         <div className="flex items-center space-x-3 bg-[#1D1D21]/90 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/15 shadow-xl w-fit">
@@ -117,14 +160,46 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Outlets Grid - Dark Burgundy Card Boxes (#4C1829) with Crimson Border (#930E36) & Depth Shadow */}
-      {loading ? (
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-[#4C1829]/70 border border-red-500/50 rounded-3xl p-8 text-center space-y-4 max-w-lg mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
+            <AlertCircle size={28} />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-white">Outlets Unavailable</h3>
+            <p className="text-xs text-white/70">{error}</p>
+          </div>
+          <button
+            onClick={fetchShops}
+            className="inline-flex items-center space-x-2 bg-white text-[#4C1829] px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider hover:bg-white/90 transition-all shadow-lg"
+          >
+            <RefreshCw size={14} />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      )}
+
+      {/* Loading Skeleton */}
+      {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} className="h-56 bg-[#4C1829]/30 animate-pulse rounded-3xl border border-[#930E36]/30"></div>
           ))}
         </div>
-      ) : (
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && filteredShops.length === 0 && (
+        <div className="bg-[#1D1D21]/80 border border-white/10 rounded-3xl p-10 text-center space-y-3 max-w-md mx-auto">
+          <Store size={36} className="text-white/40 mx-auto" />
+          <h3 className="text-base font-bold text-white">No Outlets Available</h3>
+          <p className="text-xs text-white/60">No active stalls match the selected complex filter right now.</p>
+        </div>
+      )}
+
+      {/* Outlets Grid */}
+      {!loading && !error && filteredShops.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredShops.map((shop) => (
             <div

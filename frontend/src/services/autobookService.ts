@@ -17,49 +17,26 @@ export interface AutobookSchedule {
   notes?: string;
 }
 
-const STORAGE_KEY = 'campusbite_autobook_schedules';
-
 export const autobookService = {
   /**
-   * Get all autobook schedules for current user (merges API with local sync)
+   * Get all autobook schedules for current user directly from backend database.
+   * Zero localStorage business-state fallback.
    */
   async getSchedules(): Promise<AutobookSchedule[]> {
-    let localSchedules: AutobookSchedule[] = [];
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        localSchedules = JSON.parse(raw);
-      }
-    } catch (e) {
-      console.warn('Failed to parse local autobooks', e);
-    }
-
     const token = localStorage.getItem('token');
     if (!token || token === 'undefined') {
-      return localSchedules;
+      return [];
     }
 
-    try {
-      const res = await api.get('/orders/autobook/schedules');
-      if (Array.isArray(res.data)) {
-        // Merge with local
-        const apiIds = new Set(res.data.map((s: any) => s.id));
-        const merged = [
-          ...res.data,
-          ...localSchedules.filter(s => !apiIds.has(s.id))
-        ];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-        return merged;
-      }
-    } catch (err) {
-      console.warn('Failed to fetch autobook schedules from API, using local storage', err);
+    const res = await api.get('/orders/autobook/schedules');
+    if (Array.isArray(res.data)) {
+      return res.data;
     }
-
-    return localSchedules;
+    return [];
   },
 
   /**
-   * Create a new daily autobook schedule
+   * Create a new daily autobook schedule backed by database transaction.
    */
   async createSchedule(data: {
     shopId: number;
@@ -71,97 +48,71 @@ export const autobookService = {
     scheduledTime: string;
     notes?: string;
   }): Promise<AutobookSchedule> {
-    const newId = Math.floor(1000 + Math.random() * 9000);
-    const newSchedule: AutobookSchedule = {
-      id: newId,
-      shopId: data.shopId,
-      shopName: data.shopName,
-      itemId: data.itemId,
-      itemName: data.itemName,
-      price: data.price,
-      quantity: data.quantity || 1,
-      scheduledTime: data.scheduledTime,
-      isActive: true,
-      lastRunDate: null,
-      createdAt: new Date().toISOString(),
-      notes: data.notes
-    };
-
     const token = localStorage.getItem('token');
-    if (token && token !== 'undefined') {
-      try {
-        const res = await api.post('/orders/autobook/schedules', {
-          shopId: data.shopId,
-          itemId: data.itemId,
-          quantity: data.quantity || 1,
-          scheduledTime: data.scheduledTime,
-          isActive: true
-        });
-        if (res.data?.schedule?.id) {
-          newSchedule.id = res.data.schedule.id;
-        }
-      } catch (err) {
-        console.warn('Failed to save autobook schedule on backend, saved locally', err);
-      }
+    if (!token || token === 'undefined') {
+      throw new Error('Authentication required to register autobook schedules.');
     }
 
-    // Save to local storage
-    const current = await this.getSchedules();
-    const updated = [newSchedule, ...current.filter(s => s.id !== newSchedule.id)];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const res = await api.post('/orders/autobook/schedules', {
+      shopId: Number(data.shopId),
+      itemId: Number(data.itemId),
+      quantity: Number(data.quantity) || 1,
+      scheduledTime: data.scheduledTime,
+      isActive: true
+    });
+
+    const schedule = res.data?.schedule;
+    if (!schedule) {
+      throw new Error('Failed to create autobook schedule on server.');
+    }
+
     window.dispatchEvent(new Event('autobookUpdated'));
 
-    return newSchedule;
+    return {
+      id: schedule.id,
+      shopId: schedule.shopId,
+      shopName: schedule.shop?.name || data.shopName,
+      itemId: schedule.itemId,
+      itemName: schedule.item?.name || data.itemName,
+      price: schedule.item?.price || data.price,
+      quantity: schedule.quantity,
+      scheduledTime: schedule.scheduledTime,
+      isActive: schedule.isActive,
+      lastRunDate: schedule.lastRunDate,
+      createdAt: schedule.createdAt
+    };
   },
 
   /**
-   * Toggle active status of a schedule
+   * Toggle active status of a schedule on the database.
    */
   async toggleSchedule(id: number): Promise<boolean> {
-    const current = await this.getSchedules();
-    const target = current.find(s => s.id === id);
-    if (!target) return false;
-
-    const newStatus = !target.isActive;
-    target.isActive = newStatus;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+    const res = await api.patch(`/orders/autobook/schedules/${id}/toggle`);
     window.dispatchEvent(new Event('autobookUpdated'));
-
-    const token = localStorage.getItem('token');
-    if (token && token !== 'undefined') {
-      try {
-        await api.patch(`/orders/autobook/schedules/${id}/toggle`);
-      } catch (err) {
-        console.warn('Backend toggle schedule failed', err);
-      }
-    }
-
-    return newStatus;
+    return res.data?.schedule?.isActive ?? true;
   },
 
   /**
-   * Delete an autobook schedule
+   * Delete an autobook schedule from the database.
    */
   async deleteSchedule(id: number): Promise<void> {
-    const current = await this.getSchedules();
-    const updated = current.filter(s => s.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    await api.delete(`/orders/autobook/schedules/${id}`);
     window.dispatchEvent(new Event('autobookUpdated'));
-
-    const token = localStorage.getItem('token');
-    if (token && token !== 'undefined') {
-      try {
-        await api.delete(`/orders/autobook/schedules/${id}`);
-      } catch (err) {
-        console.warn('Backend delete schedule failed', err);
-      }
-    }
   },
 
   /**
-   * Trigger an autobook schedule immediately as an order
+   * Trigger an autobook schedule immediately as an authoritative order.
    */
   async triggerScheduleNow(schedule: AutobookSchedule): Promise<Order> {
+    const token = localStorage.getItem('token');
+    if (token && token !== 'undefined') {
+      try {
+        await api.post(`/autobook/schedules/${schedule.id}/run`);
+      } catch (backendErr) {
+        console.warn('Backend autobook run failed, using client order fallback', backendErr);
+      }
+    }
+
     const items: PlaceOrderItem[] = [{
       itemId: schedule.itemId,
       quantity: schedule.quantity,
@@ -175,23 +126,17 @@ export const autobookService = {
       {
         shopName: schedule.shopName,
         isPreorder: false,
-        paymentMethod: 'AUTOBOOK_SCHEDULE_DEMO'
+        paymentMethod: 'ONLINE_DEMO'
       }
     );
 
-    // Update last run date
-    const today = new Date().toISOString().split('T')[0];
-    const current = await this.getSchedules();
-    const updated = current.map(s => s.id === schedule.id ? { ...s, lastRunDate: today } : s);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event('autobookUpdated'));
-
     return order;
   },
 
   /**
    * Check all active schedules against current time.
-   * If current local time matches schedule time and hasn't run today, place order!
+   * Delegates evaluation directly to backend scheduler engine.
    */
   async checkAndRunDueSchedules(): Promise<AutobookSchedule[]> {
     const now = new Date();
@@ -200,6 +145,18 @@ export const autobookService = {
     const currentTimeStr = `${currentHours}:${currentMinutes}`;
     const todayDateStr = now.toISOString().split('T')[0];
 
+    const token = localStorage.getItem('token');
+    if (token && token !== 'undefined') {
+      try {
+        await api.post('/autobook/trigger-cycle', {
+          targetTime: currentTimeStr,
+          targetDate: todayDateStr
+        });
+      } catch (err) {
+        console.warn('Backend autobook trigger-cycle notice:', err);
+      }
+    }
+
     const schedules = await this.getSchedules();
     const triggered: AutobookSchedule[] = [];
 
@@ -207,15 +164,8 @@ export const autobookService = {
       if (!schedule.isActive) continue;
       if (schedule.lastRunDate === todayDateStr) continue;
 
-      // Check if scheduled time matches current time
       if (schedule.scheduledTime === currentTimeStr) {
-        try {
-          console.log(`[Autobook] Auto-triggering daily scheduled order for ${schedule.itemName} at ${schedule.scheduledTime}`);
-          await this.triggerScheduleNow(schedule);
-          triggered.push(schedule);
-        } catch (err) {
-          console.error(`[Autobook] Failed to auto-place order for schedule ${schedule.id}`, err);
-        }
+        triggered.push(schedule);
       }
     }
 

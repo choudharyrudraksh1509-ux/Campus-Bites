@@ -6,18 +6,48 @@ export const getShops = async (req: Request, res: Response): Promise<void> => {
     try {
         let shops = await prisma.shop.findMany({
             where: { status: 'ACTIVE' },
-            include: { area: true }
+            select: {
+                id: true,
+                name: true,
+                status: true,
+                areaId: true,
+                isClosingSoon: true,
+                closingDiscount: true,
+                area: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                }
+            }
         });
 
         if (shops.length === 0) {
-            await ensureStallStaffSeeded();
-            shops = await prisma.shop.findMany({
-                where: { status: 'ACTIVE' },
-                include: { area: true }
-            });
+            // Guard against accidental mock/seed data injection in production
+            if (process.env.NODE_ENV !== 'production' && process.env.AUTO_SEED === 'true') {
+                await ensureStallStaffSeeded();
+                shops = await prisma.shop.findMany({
+                    where: { status: 'ACTIVE' },
+                    select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        areaId: true,
+                        isClosingSoon: true,
+                        closingDiscount: true,
+                        area: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         const mapped = shops.map(s => ({
+            id: s.id,
             shop_id: s.id,
             name: s.name,
             status: s.status,
@@ -41,6 +71,7 @@ export const getShopById = async (req: Request, res: Response): Promise<void> =>
             return;
         }
         res.json({
+            id: shop.id,
             shop_id: shop.id,
             name: shop.name,
             status: shop.status,
@@ -57,7 +88,30 @@ export const getShopMenu = async (req: Request, res: Response): Promise<void> =>
         const { shopId } = req.params;
         const items = await prisma.foodItem.findMany({
             where: { shopId: Number(shopId), isAvailable: true },
-            include: { category: true, shop: true }
+            select: {
+                id: true,
+                shopId: true,
+                categoryId: true,
+                name: true,
+                description: true,
+                price: true,
+                originalPrice: true,
+                discountPercent: true,
+                isDynamicPricing: true,
+                isAvailable: true,
+                category: {
+                    select: {
+                        name: true
+                    }
+                },
+                shop: {
+                    select: {
+                        name: true,
+                        isClosingSoon: true,
+                        closingDiscount: true
+                    }
+                }
+            }
         });
         const mapped = items.map(item => {
             let cleanDescription = item.description || '';
