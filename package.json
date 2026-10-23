@@ -1,0 +1,26 @@
+{
+  "name": "campus-bites",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Campus Bites - Campus Food Ordering Platform",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build": "npm run build:backend && npm run build:frontend",
+    "test": "npm --prefix backend run test",
+    "test:acceptance": "npm --prefix backend run test:acceptance",
+    "test:security": "npm --prefix backend run test:security"
+  },
+  "keywords": [
+    "food-ordering",
+    "campus-bites",
+    "react",
+    "express",
+    "prisma",
+    "postgresql"
+  ],
+  "author": "",
+  "license": "ISC"
+}

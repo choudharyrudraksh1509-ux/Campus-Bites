@@ -98,6 +98,10 @@ export default function Login({ onSuccess }: LoginProps) {
       setError('Please enter your password.');
       return false;
     }
+    if (isRegister && password.trim().length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return false;
+    }
     return true;
   };
 
@@ -109,8 +113,14 @@ export default function Login({ onSuccess }: LoginProps) {
 
     setLoading(true);
     const endpoint = isRegister ? '/auth/register' : '/auth/login';
-    const finalPassword = password || 'password123';
-    const payload: any = isRegister ? { fullName: name, email, password: finalPassword } : { email, password: finalPassword };
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim() || 'password123';
+    const cleanName = name.trim();
+
+    const payload: any = isRegister
+      ? { fullName: cleanName, email: cleanEmail, password: cleanPassword }
+      : { email: cleanEmail, password: cleanPassword };
+
     if (loginType === 'STAFF' && selectedStallId) {
       payload.shopId = Number(selectedStallId);
     }
@@ -123,8 +133,8 @@ export default function Login({ onSuccess }: LoginProps) {
       // If backend registration didn't return token and user directly, automatically login
       if (isRegister && (!userToken || !userData)) {
         const loginRes = await api.post('/auth/login', {
-          email: email.trim().toLowerCase(),
-          password
+          email: cleanEmail,
+          password: cleanPassword
         });
         userData = loginRes.data?.user;
         userToken = loginRes.data?.token;
@@ -149,8 +159,19 @@ export default function Login({ onSuccess }: LoginProps) {
         setError('Authentication succeeded, but failed to retrieve session. Please log in.');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.error || err.response?.data?.issues?.[0]?.message || 'Authentication failed. Please check your details.';
-      setError(msg);
+      if (!err.response) {
+        setError('Unable to reach server. Please check your network connection or verify that the backend is running.');
+      } else if (err.response.status === 401) {
+        setError(err.response.data?.error || 'Invalid credentials. Please verify your email/ID and password.');
+      } else if (err.response.status === 400) {
+        setError(err.response.data?.error || err.response.data?.issues?.[0]?.message || 'Invalid details provided.');
+      } else if (err.response.status === 403) {
+        setError(err.response.data?.error || 'Access denied.');
+      } else if (err.response.status === 429) {
+        setError('Too many requests. Please wait a moment before trying again.');
+      } else {
+        setError(err.response.data?.error || 'Authentication service error. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

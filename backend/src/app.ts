@@ -13,23 +13,54 @@ const app = express();
 // Security HTTP headers
 app.use(helmet());
 
-// Environment-based CORS allowlist
+// Environment-based CORS allowlist with support for localhost, Vercel, and Render deployments
 const allowedOrigins = env.ALLOWED_ORIGINS
     ? env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : ['http://localhost:5173', 'http://localhost:3000'];
+    : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4173', 'http://localhost:5174'];
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (mobile clients, curl, health probes)
+        // Allow requests with no origin (mobile clients, curl, serverless, health probes)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+
+        // Allow wildcard or explicit origin in allowlist
+        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
-        return callback(new Error('Blocked by CORS policy'));
+
+        // Allow any localhost / 127.0.0.1 on any port
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+            return callback(null, true);
+        }
+
+        // Allow Vercel preview and production deployments (*.vercel.app)
+        if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
+            return callback(null, true);
+        }
+
+        // Allow Render deployments (*.onrender.com)
+        if (/^https:\/\/.*\.onrender\.com$/.test(origin)) {
+            return callback(null, true);
+        }
+
+        // In development / non-production, permit all origins to eliminate friction
+        if (env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+
+        return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'Idempotency-Key',
+        'idempotency-key',
+        'x-idempotency-key'
+    ]
 }));
 
 // Request payload size limiting to prevent denial-of-service

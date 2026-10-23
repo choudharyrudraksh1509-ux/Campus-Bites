@@ -81,12 +81,12 @@ npm ci
 ```
 
 #### 2. Configure Environment Variables
-Create `.env.production` or configure in the hosting dashboard:
+Create `.env.production` or configure in the hosting dashboard (e.g., Vercel / Netlify Settings -> Environment Variables):
 ```bash
-VITE_API_BASE_URL="https://api.campusbites.edu/api"
-VITE_SUPABASE_URL="https://oddjnojvieprehojibdq.supabase.co"
-VITE_SUPABASE_ANON_KEY="eyJhbGciOiJIUz..."
+VITE_API_URL="https://campus-bites-backend.onrender.com/api"
+VITE_DEMO_MODE="false"
 ```
+> **Note on URL Resolution**: In production, if `VITE_API_URL` is omitted, the frontend automatically falls back to relative `/api` on the same host (ideal when deployed behind an API gateway, reverse proxy, or unified domain). If using separate hosts (e.g. Frontend on Vercel and Backend on Render), set `VITE_API_URL` to your full backend API URL (`https://your-backend-app.onrender.com/api`).
 
 #### 3. Build Static Bundle
 ```bash

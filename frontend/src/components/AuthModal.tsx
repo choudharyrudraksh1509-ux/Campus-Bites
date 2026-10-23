@@ -54,6 +54,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
       return;
     }
 
+    if (isRegister && password.trim().length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -90,7 +95,19 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
         onClose();
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Authentication failed');
+      if (!err.response) {
+        setError('Unable to reach server. Please check your connection or verify backend is running.');
+      } else if (err.response.status === 401) {
+        setError(err.response.data?.error || 'Invalid email or password.');
+      } else if (err.response.status === 400) {
+        setError(err.response.data?.error || err.response.data?.issues?.[0]?.message || 'Invalid details provided.');
+      } else if (err.response.status === 403) {
+        setError(err.response.data?.error || 'Access denied.');
+      } else if (err.response.status === 429) {
+        setError('Too many requests. Please wait a moment before trying again.');
+      } else {
+        setError(err.response.data?.error || 'Authentication error. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

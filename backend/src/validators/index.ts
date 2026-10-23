@@ -22,8 +22,8 @@ export const validateRequest = (schema: ZodSchema) =>
 
 export const registerSchema = z.object({
   body: z.object({
-    fullName: z.string().min(2, 'Name must be at least 2 characters').max(120),
-    email: z.string().email('Invalid email address').max(150),
+    fullName: z.string().trim().min(2, 'Name must be at least 2 characters').max(120),
+    email: z.string().trim().toLowerCase().email('Invalid email address').max(150),
     password: z.string().min(6, 'Password must be at least 6 characters').max(128),
     phone: z.string().max(20).optional().refine(val => {
       if (!val || !val.trim()) return true;
@@ -41,7 +41,7 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   body: z.object({
-    email: z.string().min(1, 'Email or Staff ID is required').max(150),
+    email: z.string().trim().min(1, 'Email or Staff ID is required').max(150),
     password: z.string().min(1, 'Password cannot be empty').max(128),
     shopId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]).optional()
   })
