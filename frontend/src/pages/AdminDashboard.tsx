@@ -536,6 +536,9 @@ export default function AdminDashboard() {
       fetchStalls();
     } else if (activeTab === 'users') {
       fetchUsers();
+      pollIntervalRef.current = setInterval(() => {
+        fetchUsers();
+      }, 4000);
     } else if (activeTab === 'reports') {
       fetchReports();
     } else if (activeTab === 'audit') {
@@ -1650,7 +1653,7 @@ export default function AdminDashboard() {
                           <td className="py-4 px-5 text-right font-mono font-bold text-white">
                             {u.ordersCount}
                           </td>
-                          <td className="py-4 px-5 text-right space-x-1.5 whitespace-nowrap">
+                          <td className="py-4 px-5 text-right whitespace-nowrap">
                             <button
                               onClick={() => promptToggleUserStatus(u)}
                               className={`p-1.5 rounded-xl border transition-all ${
@@ -1661,19 +1664,6 @@ export default function AdminDashboard() {
                               title={u.isActive ? 'Deactivate User' : 'Activate User'}
                             >
                               <Power size={13} />
-                            </button>
-
-                            <button
-                              onClick={() => setEditRoleModal({
-                                isOpen: true,
-                                user: u,
-                                role: u.role,
-                                shopId: '',
-                                isSubmitting: false
-                              })}
-                              className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 text-[11px] font-semibold transition-all"
-                            >
-                              Edit Role
                             </button>
                           </td>
                         </tr>
@@ -2376,93 +2366,6 @@ export default function AdminDashboard() {
             >
               Close
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================================== */}
-      {/* MODAL: EDIT USER ROLE */}
-      {/* ==================================================================== */}
-      {editRoleModal.isOpen && editRoleModal.user && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1D1D21] border border-white/10 rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 space-y-4">
-            <button
-              onClick={() => setEditRoleModal({ isOpen: false, user: null, role: 'CUSTOMER', shopId: '', isSubmitting: false })}
-              className="absolute top-5 right-5 text-white/40 hover:text-white p-1 rounded-lg"
-            >
-              <X size={16} />
-            </button>
-
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#930E36]/30 border border-[#930E36]/50 flex items-center justify-center text-[#FF004B]">
-                <Shield size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-white text-base">User Permissions</h3>
-                <p className="text-xs text-white/50">{editRoleModal.user.fullName} ({editRoleModal.user.email})</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveUserRole} className="space-y-4 pt-2">
-              <div>
-                <label className="text-xs font-semibold text-white/70 block mb-1">Select Access Role</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {['CUSTOMER', 'STAFF', 'OWNER', 'ADMIN'].map(r => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setEditRoleModal(prev => ({ ...prev, role: r }))}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all border ${
-                        editRoleModal.role === r
-                          ? 'bg-gradient-to-r from-[#930E36] to-[#FF004B] text-white border-[#FF004B]'
-                          : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {editRoleModal.role === 'STAFF' && (
-                <div>
-                  <label className="text-xs font-semibold text-white/70 block mb-1">Assign to Stall</label>
-                  <select
-                    value={editRoleModal.shopId}
-                    onChange={e => setEditRoleModal(prev => ({ ...prev, shopId: e.target.value }))}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#FF004B]"
-                  >
-                    <option value="">Select Stall...</option>
-                    {stalls.map(s => (
-                      <option key={s.id} value={s.id}>{s.name} ({s.area_name})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {editRoleModal.user.role === 'ADMIN' && editRoleModal.role !== 'ADMIN' && (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
-                  Note: The platform prevents demoting the last active administrator to avoid platform lockout.
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditRoleModal({ isOpen: false, user: null, role: 'CUSTOMER', shopId: '', isSubmitting: false })}
-                  className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 py-2.5 rounded-xl text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={editRoleModal.isSubmitting}
-                  className="flex-1 bg-gradient-to-r from-red-600 to-[#FF004B] hover:from-red-500 hover:to-[#FF2666] text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-red-900/30"
-                >
-                  {editRoleModal.isSubmitting ? 'Saving...' : 'Save Permissions'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

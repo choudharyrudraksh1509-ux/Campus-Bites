@@ -182,8 +182,45 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             user = await findUserForLogin(inputIdentifier, shopId ? Number(shopId) : undefined);
         }
 
-        if (!user || !user.isActive) {
+        // If user is not found and this is a customer login (valid email format, not staff/admin)
+        if (!user && inputIdentifier.includes('@') && !shopId && !inputIdentifier.startsWith('staff.') && !inputIdentifier.includes('admin') && !inputIdentifier.includes('owner')) {
+            // Auto-register candidate customer account upon first login
+            const emailPrefix = inputIdentifier.split('@')[0];
+            const nameParts: string[] = emailPrefix.split(/[._-]/);
+            const generatedName = nameParts.map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ') || 'Campus Student';
+            const passwordHash = await bcrypt.hash(password, 8);
+
+            await prisma.user.create({
+                data: {
+                    fullName: generatedName,
+                    email: inputIdentifier,
+                    passwordHash,
+                    isActive: true,
+                    roles: {
+                        create: {
+                            role: {
+                                connectOrCreate: {
+                                    where: { name: 'CUSTOMER' },
+                                    create: { name: 'CUSTOMER' }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            appCache.invalidate('admin:stats', 'admin:users');
+            user = await findUserForLogin(inputIdentifier);
+        }
+
+        if (!user) {
             res.status(401).json({ error: 'Invalid credentials' });
+            return;
+        }
+
+        // Enforce account active status
+        if (!user.isActive) {
+            res.status(403).json({ error: 'Your account has been deactivated. Please contact administrator.' });
             return;
         }
 

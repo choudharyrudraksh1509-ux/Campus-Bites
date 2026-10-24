@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
+import prisma from '../db/prisma';
+import appCache from '../services/cacheService';
 
 export interface AuthUser {
     userId: number;
@@ -27,14 +29,33 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
         return;
     }
 
-    jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }, (err: any, decoded: any) => {
+    jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }, async (err: any, decoded: any) => {
         if (err || !decoded || !decoded.userId || !decoded.role) {
             res.status(403).json({ error: 'Invalid or expired token' });
             return;
         }
 
+        const userId = Number(decoded.userId);
+
+        try {
+            const isActive = await appCache.getOrSet(`user:status:${userId}`, 10000, async () => {
+                const u = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { isActive: true }
+                });
+                return u ? u.isActive : false;
+            });
+
+            if (!isActive) {
+                res.status(403).json({ error: 'Your account has been deactivated. Please contact administrator.' });
+                return;
+            }
+        } catch {
+            // Fallback: continue if cache check encounters unexpected issue
+        }
+
         req.user = {
-            userId: Number(decoded.userId),
+            userId,
             role: decoded.role,
             shopId: decoded.shopId ? Number(decoded.shopId) : undefined,
             shopName: decoded.shopName,

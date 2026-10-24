@@ -879,7 +879,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
                     staffShops: { include: { shop: true } },
                     _count: { select: { orders: true } }
                 },
-                orderBy: { id: 'asc' },
+                orderBy: { id: 'desc' },
                 skip: (pageNum - 1) * limitNum,
                 take: limitNum
             })
@@ -1057,7 +1057,7 @@ export const updateUserStatus = async (req: AuthRequest, res: Response): Promise
             data: { isActive }
         });
 
-        appCache.invalidate(`auth:me:${uId}`, 'admin:stats');
+        appCache.invalidate(`auth:me:${uId}`, `user:status:${uId}`, 'admin:stats', 'admin:users');
 
         if (req.user?.userId) {
             await recordAuditLog(
