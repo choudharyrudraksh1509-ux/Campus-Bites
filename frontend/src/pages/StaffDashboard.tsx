@@ -28,6 +28,10 @@ import {
   ChevronDown,
   Flame,
   Tag,
+  BarChart3,
+  TrendingUp,
+  Award,
+  Activity,
   X 
 } from 'lucide-react';
 import api from '../services/api';
@@ -118,8 +122,50 @@ interface StaffInfo {
   phone?: string;
 }
 
+interface StaffAnalyticsData {
+  stall: {
+    id: number;
+    name: string;
+    areaName: string;
+    status: string;
+    isClosingSoon: boolean;
+    closingDiscount: number;
+    menuItemsCount: number;
+  };
+  summary: {
+    totalRevenue: number;
+    todayRevenue: number;
+    todayOrders: number;
+    totalOrders: number;
+    totalCompleted: number;
+    activeQueueCount: number;
+    avgPrepMinutes: number;
+    avgTicket: number;
+    cancellationCount: number;
+  };
+  dailyTrend: Array<{
+    date: string;
+    dayLabel: string;
+    orders: number;
+    revenue: number;
+  }>;
+  statusDistribution: Array<{
+    status: string;
+    count: number;
+    percentage: number;
+  }>;
+  topItems: Array<{
+    id: number;
+    name: string;
+    category: string;
+    price: number;
+    unitsSold: number;
+    revenue: number;
+  }>;
+}
+
 export default function StaffDashboard() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'history' | 'menu' | 'profile'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'history' | 'analytics' | 'menu' | 'profile'>('orders');
   
   // Data states
   const [orders, setOrders] = useState<Order[]>([]);
@@ -128,6 +174,8 @@ export default function StaffDashboard() {
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [stallInfo, setStallInfo] = useState<StallInfo | null>(null);
   const [staffProfile, setStaffProfile] = useState<StaffInfo | null>(null);
+  const [analyticsData, setAnalyticsData] = useState<StaffAnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // Loading & refresh states
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -270,6 +318,8 @@ export default function StaffDashboard() {
       }, 4000);
     } else if (activeTab === 'history') {
       fetchOrderHistory();
+    } else if (activeTab === 'analytics') {
+      fetchAnalytics();
     } else if (activeTab === 'menu') {
       fetchMenu();
     } else if (activeTab === 'profile') {
@@ -284,6 +334,21 @@ export default function StaffDashboard() {
   }, [activeTab]);
 
   // Fetch functions
+  const fetchAnalytics = async () => {
+    setAnalyticsLoading(true);
+    setIsRefreshing(true);
+    try {
+      const res = await api.get('/staff/analytics');
+      setAnalyticsData(res.data);
+    } catch (err) {
+      console.error('Failed to fetch stall analytics:', err);
+      showToast('Failed to load performance analytics', 'error');
+    } finally {
+      setAnalyticsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
   const fetchOrders = async (showLoading = false) => {
     if (showLoading) setIsRefreshing(true);
     try {
@@ -773,6 +838,18 @@ export default function StaffDashboard() {
           </button>
 
           <button 
+            onClick={() => setActiveTab('analytics')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs uppercase tracking-wider font-semibold transition-all ${
+              activeTab === 'analytics' 
+                ? 'bg-[#930E36]/25 text-[#FF004B] border border-[#930E36]/40 shadow-inner' 
+                : 'text-white/60 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <BarChart3 size={16} />
+            <span>Dashboard & Analysis</span>
+          </button>
+
+          <button 
             onClick={() => setActiveTab('menu')}
             className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs uppercase tracking-wider font-semibold transition-all ${
               activeTab === 'menu' 
@@ -809,6 +886,7 @@ export default function StaffDashboard() {
             <h2 className="text-xs sm:text-sm font-bold tracking-wider uppercase text-white whitespace-nowrap shrink-0">
               {activeTab === 'orders' && 'Live Kitchen Orders'}
               {activeTab === 'history' && 'Past Orders'}
+              {activeTab === 'analytics' && 'Dashboard & Performance'}
               {activeTab === 'menu' && 'Stall Menu'}
               {activeTab === 'profile' && 'Settings'}
             </h2>
@@ -829,6 +907,7 @@ export default function StaffDashboard() {
               onClick={() => {
                 if (activeTab === 'orders') fetchOrders(true);
                 else if (activeTab === 'history') fetchOrderHistory();
+                else if (activeTab === 'analytics') fetchAnalytics();
                 else if (activeTab === 'menu') fetchMenu();
                 else fetchStallDetails();
               }} 
@@ -1148,7 +1227,381 @@ export default function StaffDashboard() {
           )}
 
           {/* ===================================================== */}
-          {/* TAB 3: MANAGE MENU */}
+          {/* TAB 3: DASHBOARD & ANALYSIS */}
+          {/* ===================================================== */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-6 animate-in fade-in">
+              {analyticsLoading && !analyticsData ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                  <RefreshCw size={28} className="animate-spin text-[#FF004B]" />
+                  <p className="text-xs text-white/50 tracking-wider uppercase font-semibold">Loading stall analytics...</p>
+                </div>
+              ) : !analyticsData ? (
+                <div className="text-center py-16 bg-white/[0.02] border border-white/5 rounded-2xl p-6">
+                  <AlertCircle size={32} className="mx-auto text-amber-400 mb-2" />
+                  <h3 className="text-sm font-bold text-white">Analytics Unavailable</h3>
+                  <p className="text-xs text-white/50 mt-1">Unable to load stall performance data at this moment.</p>
+                  <button
+                    onClick={fetchAnalytics}
+                    className="mt-4 px-4 py-2 bg-[#930E36] hover:bg-[#B31242] text-white rounded-xl text-xs font-bold uppercase tracking-wider"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Stall Overview Bar */}
+                  <div className="bg-[#4C1829]/30 border border-[#930E36]/40 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-[#930E36]/30 border border-[#930E36]/60 flex items-center justify-center text-[#FF004B] shrink-0">
+                        <Store size={22} />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                            {analyticsData.stall.name}
+                          </h3>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            analyticsData.stall.status === 'ACTIVE' || analyticsData.stall.status === 'OPEN'
+                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50'
+                              : 'bg-amber-950/80 text-amber-300 border border-amber-700/50'
+                          }`}>
+                            {analyticsData.stall.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/50 mt-0.5">
+                          {analyticsData.stall.areaName} • {analyticsData.stall.menuItemsCount} Active Menu Items
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {analyticsData.stall.isClosingSoon && (
+                        <div className="px-3 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center space-x-1.5">
+                          <Flame size={14} className="text-amber-400" />
+                          <span>Clearance Sale ({analyticsData.stall.closingDiscount}% OFF)</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={fetchAnalytics}
+                        disabled={isRefreshing}
+                        className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-white/70 flex items-center space-x-1.5 transition-colors"
+                      >
+                        <RefreshCw size={12} className={isRefreshing ? 'animate-spin text-[#FF004B]' : ''} />
+                        <span>Refresh Metrics</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 6 Key Operational KPI Cards */}
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    {/* 1. Today's Revenue */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-[#930E36]/50 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Today's Revenue</span>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
+                          <DollarSign size={16} />
+                        </div>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-400">
+                        ₹{analyticsData.summary.todayRevenue.toLocaleString('en-IN')}
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-1 truncate">
+                        {analyticsData.summary.todayOrders} orders processed today
+                      </p>
+                    </div>
+
+                    {/* 2. Total Revenue */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-[#930E36]/50 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Total Revenue</span>
+                        <div className="w-8 h-8 rounded-xl bg-[#930E36]/30 border border-[#930E36]/50 flex items-center justify-center text-[#FF004B]">
+                          <TrendingUp size={16} />
+                        </div>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-white">
+                        ₹{analyticsData.summary.totalRevenue.toLocaleString('en-IN')}
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-1 truncate">
+                        {analyticsData.summary.totalCompleted} lifetime completed
+                      </p>
+                    </div>
+
+                    {/* 3. Active Queue */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-[#930E36]/50 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Live Kitchen Queue</span>
+                        <div className="w-8 h-8 rounded-xl bg-amber-950/40 border border-amber-800/40 flex items-center justify-center text-amber-400">
+                          <Clock size={16} />
+                        </div>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-amber-400">
+                        {analyticsData.summary.activeQueueCount}
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-1 truncate">
+                        Orders currently being cooked / queued
+                      </p>
+                    </div>
+
+                    {/* 4. Avg Prep Time */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-[#930E36]/50 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Avg Prep Speed</span>
+                        <div className="w-8 h-8 rounded-xl bg-blue-950/40 border border-blue-800/40 flex items-center justify-center text-blue-400">
+                          <Activity size={16} />
+                        </div>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-blue-400">
+                        {analyticsData.summary.avgPrepMinutes}m
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-1 truncate">
+                        Turnaround from order to ready
+                      </p>
+                    </div>
+
+                    {/* 5. Average Ticket */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-[#930E36]/50 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Avg Order Value</span>
+                        <div className="w-8 h-8 rounded-xl bg-purple-950/40 border border-purple-800/40 flex items-center justify-center text-purple-400">
+                          <Tag size={16} />
+                        </div>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-purple-300">
+                        ₹{analyticsData.summary.avgTicket}
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-1 truncate">
+                        Average spend per transaction
+                      </p>
+                    </div>
+
+                    {/* 6. Fulfillment Rate */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 relative overflow-hidden group hover:border-[#930E36]/50 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Fulfillment Rate</span>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
+                          <CheckCircle2 size={16} />
+                        </div>
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-400">
+                        {analyticsData.summary.totalOrders > 0 
+                          ? Math.round((analyticsData.summary.totalCompleted / analyticsData.summary.totalOrders) * 100)
+                          : 100}%
+                      </div>
+                      <p className="text-[11px] text-white/40 mt-1 truncate">
+                        {analyticsData.summary.cancellationCount} cancelled of {analyticsData.summary.totalOrders}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 7-Day Performance Trend Chart */}
+                  <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                          <BarChart3 size={15} className="text-[#FF004B]" />
+                          <span>7-Day Performance Trend</span>
+                        </h4>
+                        <p className="text-[11px] text-white/40 mt-0.5">
+                          Daily revenue volume and completed order throughput
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-white/40 font-mono bg-white/5 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                        Past 7 Days
+                      </span>
+                    </div>
+
+                    {/* Visual Bar Columns */}
+                    {(() => {
+                      const maxRevenue = Math.max(...analyticsData.dailyTrend.map(d => d.revenue), 100);
+                      return (
+                        <div className="grid grid-cols-7 gap-2 sm:gap-3 pt-4 pb-2 items-end min-h-[170px]">
+                          {analyticsData.dailyTrend.map((d, idx) => {
+                            const barHeightPercent = Math.max(10, Math.round((d.revenue / maxRevenue) * 100));
+                            const isToday = idx === analyticsData.dailyTrend.length - 1;
+                            return (
+                              <div key={d.date} className="flex flex-col items-center justify-end h-full space-y-2 group">
+                                <div className="text-[10px] font-mono text-white/50 group-hover:text-white transition-colors truncate">
+                                  ₹{d.revenue > 999 ? `${(d.revenue / 1000).toFixed(1)}k` : d.revenue}
+                                </div>
+                                <div className="w-full bg-white/[0.03] rounded-xl h-28 flex items-end p-1">
+                                  <div
+                                    style={{ height: `${barHeightPercent}%` }}
+                                    className={`w-full rounded-lg transition-all duration-500 relative ${
+                                      isToday 
+                                        ? 'bg-gradient-to-t from-[#930E36] to-[#FF004B] shadow-[0_0_12px_rgba(255,0,75,0.4)]'
+                                        : 'bg-gradient-to-t from-white/10 to-white/30 group-hover:from-[#930E36]/60 group-hover:to-[#FF004B]/80'
+                                    }`}
+                                  >
+                                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-[10px] font-mono px-1.5 py-0.5 rounded text-white whitespace-nowrap z-10 pointer-events-none">
+                                      {d.orders} orders
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-center">
+                                  <div className={`text-[11px] font-bold ${isToday ? 'text-[#FF004B]' : 'text-white/70'}`}>
+                                    {d.dayLabel}
+                                  </div>
+                                  <div className="text-[9px] text-white/30 font-mono">
+                                    {d.orders} {d.orders === 1 ? 'ord' : 'ords'}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Two Columns: Top Selling Items & Status Breakdown */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    
+                    {/* Top 5 Best-Selling Food Items */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 space-y-3.5 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                          <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                            <Award size={15} className="text-amber-400" />
+                            <span>Top Selling Stall Items</span>
+                          </h4>
+                          <span className="text-[10px] text-white/40 font-mono">Ranked by Units</span>
+                        </div>
+
+                        {analyticsData.topItems.length === 0 ? (
+                          <div className="py-12 text-center text-xs text-white/40">
+                            No menu item sales recorded yet.
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-white/5 mt-2">
+                            {analyticsData.topItems.map((item, index) => (
+                              <div key={item.id} className="py-3 flex items-center justify-between group">
+                                <div className="flex items-center space-x-3 min-w-0">
+                                  <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                    index === 0 
+                                      ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' 
+                                      : index === 1 
+                                      ? 'bg-slate-300/20 text-slate-200 border border-slate-300/40'
+                                      : index === 2
+                                      ? 'bg-amber-800/30 text-amber-400 border border-amber-700/40'
+                                      : 'bg-white/5 text-white/50'
+                                  }`}>
+                                    #{index + 1}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-semibold text-white truncate group-hover:text-[#FF004B] transition-colors">
+                                      {item.name}
+                                    </div>
+                                    <div className="text-[10px] text-white/40 flex items-center space-x-2 mt-0.5">
+                                      <span>{item.category}</span>
+                                      <span>•</span>
+                                      <span className="font-mono text-white/50">₹{item.price} each</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="text-right shrink-0 ml-3">
+                                  <div className="text-xs font-bold font-mono text-emerald-400">
+                                    ₹{item.revenue.toLocaleString('en-IN')}
+                                  </div>
+                                  <div className="text-[10px] text-white/40 font-mono">
+                                    {item.unitsSold} sold
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => setActiveTab('menu')}
+                        className="w-full mt-2 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-semibold text-white/60 hover:text-white transition-all text-center"
+                      >
+                        Adjust Menu Items & Dynamic Pricing →
+                      </button>
+                    </div>
+
+                    {/* Order Status Distribution */}
+                    <div className="bg-[#1D1D21] border border-white/5 rounded-2xl p-4 sm:p-5 space-y-3.5 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                          <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                            <Activity size={15} className="text-blue-400" />
+                            <span>Order Pipeline Distribution</span>
+                          </h4>
+                          <span className="text-[10px] text-white/40 font-mono">
+                            Total {analyticsData.summary.totalOrders}
+                          </span>
+                        </div>
+
+                        {/* Status Progress Multi-Bar */}
+                        <div className="w-full h-3 rounded-full bg-white/5 overflow-hidden flex my-4">
+                          {analyticsData.statusDistribution.map(sd => {
+                            let color = 'bg-gray-500';
+                            if (sd.status === 'COMPLETED') color = 'bg-emerald-500';
+                            else if (sd.status === 'PREPARING') color = 'bg-yellow-500';
+                            else if (sd.status === 'READY') color = 'bg-green-500';
+                            else if (sd.status === 'PLACED') color = 'bg-blue-500';
+                            else if (sd.status === 'CANCELLED') color = 'bg-red-500';
+                            return (
+                              <div
+                                key={sd.status}
+                                style={{ width: `${sd.percentage}%` }}
+                                className={`${color} h-full transition-all`}
+                                title={`${sd.status}: ${sd.count} (${sd.percentage}%)`}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        {/* Status items breakdown */}
+                        <div className="space-y-2 mt-2">
+                          {analyticsData.statusDistribution.map(sd => (
+                            <div key={sd.status} className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02] border border-white/5 text-xs">
+                              <div className="flex items-center space-x-2">
+                                <span className={`w-2 h-2 rounded-full ${
+                                  sd.status === 'COMPLETED' ? 'bg-emerald-400' :
+                                  sd.status === 'PREPARING' ? 'bg-yellow-400' :
+                                  sd.status === 'READY' ? 'bg-green-400' :
+                                  sd.status === 'PLACED' ? 'bg-blue-400' :
+                                  'bg-red-400'
+                                }`} />
+                                <span className="font-semibold text-white/80">{sd.status}</span>
+                              </div>
+                              <div className="flex items-center space-x-2 font-mono text-[11px]">
+                                <span className="text-white font-bold">{sd.count}</span>
+                                <span className="text-white/40">({sd.percentage}%)</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <button
+                          onClick={() => setActiveTab('orders')}
+                          className="py-2 bg-[#930E36]/30 hover:bg-[#930E36]/50 border border-[#930E36]/50 rounded-xl text-xs font-semibold text-[#FF004B] transition-all text-center"
+                        >
+                          View Live Orders →
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('history')}
+                          className="py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-semibold text-white/70 hover:text-white transition-all text-center"
+                        >
+                          View Past Logs →
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ===================================================== */}
+          {/* TAB 4: MANAGE MENU */}
           {/* ===================================================== */}
           {activeTab === 'menu' && (
             <div className="space-y-5">

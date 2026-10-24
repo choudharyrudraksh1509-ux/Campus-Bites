@@ -11,7 +11,8 @@ import {
     updateStaffStallInfo,
     getCategories,
     toggleClosingClearance,
-    toggleItemDynamicPricing
+    toggleItemDynamicPricing,
+    getStaffAnalytics
 } from '../controllers/staffController';
 import { authenticateToken, requireStaffOrAdmin } from '../middleware/auth';
 import { validateRequest, updateOrderStatusSchema, menuItemSchema } from '../validators';
@@ -21,6 +22,9 @@ const router = Router();
 // Strictly require authentication and staff/owner/admin role for all staff routes
 router.use(authenticateToken);
 router.use(requireStaffOrAdmin);
+
+// Dashboard Analytics & Performance
+router.get('/analytics', getStaffAnalytics);
 
 // Order Management
 router.get('/orders', getStaffOrders);

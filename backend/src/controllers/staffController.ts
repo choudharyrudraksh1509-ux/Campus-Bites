@@ -734,3 +734,180 @@ export const toggleItemDynamicPricing = async (req: AuthRequest, res: Response):
         res.status(500).json({ error: error.message || 'Failed to toggle dynamic pricing on item' });
     }
 };
+
+/**
+ * ============================================================================
+ * STALL DASHBOARD & PERFORMANCE ANALYTICS
+ * ============================================================================
+ */
+export const getStaffAnalytics = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const staffId = req.user?.userId;
+        if (!staffId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+
+        const shop = await getStaffAssignedShop(staffId, req.user?.shopId);
+        if (!shop) {
+            res.status(404).json({ error: 'No stall found for staff' });
+            return;
+        }
+
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const sevenDaysAgo = new Date(startOfToday.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+        // Run queries scoped specifically to this staff's shop
+        const [
+            statusCounts,
+            completedStats,
+            todayStats,
+            recentOrders,
+            topSoldItemGroups,
+            menuItemsCount
+        ] = await Promise.all([
+            prisma.order.groupBy({
+                by: ['status'],
+                where: { shopId: shop.id },
+                _count: { id: true }
+            }),
+            prisma.order.aggregate({
+                where: { shopId: shop.id, status: 'COMPLETED' },
+                _sum: { totalAmount: true },
+                _count: { id: true },
+                _avg: { estimatedMinutes: true }
+            }),
+            prisma.order.aggregate({
+                where: {
+                    shopId: shop.id,
+                    status: 'COMPLETED',
+                    orderTime: { gte: startOfToday }
+                },
+                _sum: { totalAmount: true },
+                _count: { id: true }
+            }),
+            prisma.order.findMany({
+                where: {
+                    shopId: shop.id,
+                    orderTime: { gte: sevenDaysAgo }
+                },
+                select: {
+                    orderTime: true,
+                    totalAmount: true,
+                    status: true
+                }
+            }),
+            prisma.orderItem.groupBy({
+                by: ['itemId'],
+                where: {
+                    order: { shopId: shop.id, status: 'COMPLETED' }
+                },
+                _sum: { quantity: true },
+                orderBy: { _sum: { quantity: 'desc' } },
+                take: 5
+            }),
+            prisma.foodItem.count({
+                where: { shopId: shop.id }
+            })
+        ]);
+
+        const statusMap: Record<string, number> = {};
+        statusCounts.forEach(sc => { statusMap[sc.status] = sc._count.id; });
+
+        const activeQueueCount =
+            (statusMap['PLACED'] || 0) +
+            (statusMap['PREPARING'] || 0) +
+            (statusMap['READY'] || 0);
+
+        const totalOrders = statusCounts.reduce((acc, curr) => acc + curr._count.id, 0);
+        const totalCompleted = completedStats._count.id || 0;
+        const totalRevenue = completedStats._sum.totalAmount || 0;
+        const todayRevenue = todayStats._sum.totalAmount || 0;
+        const todayOrders = todayStats._count.id || 0;
+        const avgPrepMinutes = Math.round(completedStats._avg.estimatedMinutes || 10);
+        const avgTicket = totalCompleted > 0 ? Math.round(totalRevenue / totalCompleted) : 0;
+
+        // Daily trend over past 7 days
+        const daysMap = new Map<string, { label: string; orders: number; revenue: number }>();
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(startOfToday.getTime() - i * 24 * 60 * 60 * 1000);
+            const key = d.toISOString().split('T')[0];
+            const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            daysMap.set(key, { label, orders: 0, revenue: 0 });
+        }
+
+        recentOrders.forEach(o => {
+            const key = new Date(o.orderTime).toISOString().split('T')[0];
+            const current = daysMap.get(key);
+            if (current) {
+                current.orders += 1;
+                if (o.status === 'COMPLETED') {
+                    current.revenue += o.totalAmount;
+                }
+            }
+        });
+
+        const dailyTrend = Array.from(daysMap.entries()).map(([date, val]) => ({
+            date,
+            dayLabel: val.label,
+            orders: val.orders,
+            revenue: val.revenue
+        }));
+
+        // Top selling items
+        let topItems: Array<{ id: number; name: string; category: string; price: number; unitsSold: number; revenue: number }> = [];
+        if (topSoldItemGroups.length > 0) {
+            const itemIds = topSoldItemGroups.map(g => g.itemId);
+            const foodItems = await prisma.foodItem.findMany({
+                where: { id: { in: itemIds } },
+                include: { category: true }
+            });
+            const foodItemMap = new Map(foodItems.map(f => [f.id, f]));
+
+            topItems = topSoldItemGroups.map(g => {
+                const item = foodItemMap.get(g.itemId);
+                const units = g._sum.quantity || 0;
+                const price = item?.price || 0;
+                return {
+                    id: g.itemId,
+                    name: item?.name || 'Item',
+                    category: item?.category?.name || 'General',
+                    price,
+                    unitsSold: units,
+                    revenue: units * price
+                };
+            });
+        }
+
+        res.json({
+            stall: {
+                id: shop.id,
+                name: shop.name,
+                areaName: shop.area?.name || 'Campus Outlet',
+                status: shop.status,
+                isClosingSoon: Boolean(shop.isClosingSoon),
+                closingDiscount: shop.closingDiscount || 0,
+                menuItemsCount
+            },
+            summary: {
+                totalRevenue,
+                todayRevenue,
+                todayOrders,
+                totalOrders,
+                totalCompleted,
+                activeQueueCount,
+                avgPrepMinutes,
+                avgTicket,
+                cancellationCount: statusMap['CANCELLED'] || 0
+            },
+            dailyTrend,
+            statusDistribution: Object.entries(statusMap).map(([status, count]) => ({
+                status,
+                count,
+                percentage: totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0
+            })),
+            topItems
+        });
+    } catch (error: any) {
+        console.error('Error fetching staff analytics:', error);
+        res.status(500).json({ error: error.message || 'Failed to fetch stall analytics' });
+    }
+};
