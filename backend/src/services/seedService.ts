@@ -96,163 +96,191 @@ export const DEMO_STUDENTS = [
     { fullName: 'Sneha Rao', email: 'sneha.rao@vitstudent.ac.in', phone: '9840123463' }
 ];
 
+let isStallStaffSeedVerified = false;
+let seedInFlightPromise: Promise<void> | null = null;
+
 /**
  * Ensures roles, stall staff accounts, admin users, and rich real-time operational data exist.
+ * Uses single-flight concurrency lock and fast-path verification to avoid redundant DB round-trips.
  */
-export async function ensureStallStaffSeeded(): Promise<void> {
-    try {
-        const passwordHash = await bcrypt.hash('password123', 10);
+export async function ensureStallStaffSeeded(force = false): Promise<void> {
+    if (isStallStaffSeedVerified && !force) {
+        return;
+    }
+    if (seedInFlightPromise && !force) {
+        return seedInFlightPromise;
+    }
 
-        // 1. Ensure Roles
-        const roleStaff = await prisma.role.upsert({
-            where: { name: 'STAFF' },
-            update: {},
-            create: { name: 'STAFF' }
-        });
-        const roleCustomer = await prisma.role.upsert({
-            where: { name: 'CUSTOMER' },
-            update: {},
-            create: { name: 'CUSTOMER' }
-        });
-        const roleOwner = await prisma.role.upsert({
-            where: { name: 'OWNER' },
-            update: {},
-            create: { name: 'OWNER' }
-        });
-        const roleAdmin = await prisma.role.upsert({
-            where: { name: 'ADMIN' },
-            update: {},
-            create: { name: 'ADMIN' }
-        });
+    seedInFlightPromise = (async () => {
+        try {
+            if (!force) {
+                const coreEmails = [
+                    'admin@campusbites.com',
+                    'owner@campusbites.com',
+                    ...STALL_CREDENTIALS.map(s => s.email),
+                    ...DEMO_STUDENTS.map(st => st.email)
+                ];
+                const [existingCoreUsers, shopStaffCount] = await Promise.all([
+                    prisma.user.count({
+                        where: {
+                            email: { in: coreEmails },
+                            isActive: true,
+                            roles: { some: {} }
+                        }
+                    }),
+                    prisma.shopStaff.count()
+                ]);
 
-        // 2. Owner user
-        const owner = await prisma.user.upsert({
-            where: { email: 'owner@campusbites.com' },
-            update: { passwordHash },
-            create: {
-                fullName: 'Campus Operations Lead',
-                email: 'owner@campusbites.com',
-                passwordHash
+                if (existingCoreUsers >= coreEmails.length && shopStaffCount >= STALL_CREDENTIALS.length) {
+                    isStallStaffSeedVerified = true;
+                    return;
+                }
             }
-        });
-        await prisma.userRole.upsert({
-            where: { userId_roleId: { userId: owner.id, roleId: roleOwner.id } },
-            update: {},
-            create: { userId: owner.id, roleId: roleOwner.id }
-        });
 
-        // 3. Tech Admin user (for Tech Team Admin Access)
-        const admin = await prisma.user.upsert({
-            where: { email: 'admin@campusbites.com' },
-            update: { passwordHash, isActive: true },
-            create: {
-                fullName: 'Tech Operations Admin',
-                email: 'admin@campusbites.com',
-                phone: '9876543210',
-                passwordHash,
-                isActive: true
-            }
-        });
-        await prisma.userRole.upsert({
-            where: { userId_roleId: { userId: admin.id, roleId: roleAdmin.id } },
-            update: {},
-            create: { userId: admin.id, roleId: roleAdmin.id }
-        });
+            const passwordHash = await bcrypt.hash('password123', 10);
 
-        // 4. Stalls and Mapped Staff
-        for (const s of STALL_CREDENTIALS) {
-            const area = await prisma.area.upsert({
-                where: { name: s.areaName },
-                update: {},
-                create: { name: s.areaName, description: s.areaDesc }
-            });
+            // 1. Ensure Roles
+            const [roleStaff, roleCustomer, roleOwner, roleAdmin] = await Promise.all([
+                prisma.role.upsert({ where: { name: 'STAFF' }, update: {}, create: { name: 'STAFF' } }),
+                prisma.role.upsert({ where: { name: 'CUSTOMER' }, update: {}, create: { name: 'CUSTOMER' } }),
+                prisma.role.upsert({ where: { name: 'OWNER' }, update: {}, create: { name: 'OWNER' } }),
+                prisma.role.upsert({ where: { name: 'ADMIN' }, update: {}, create: { name: 'ADMIN' } })
+            ]);
 
-            let shop = await prisma.shop.findFirst({
-                where: {
-                    OR: [
-                        { name: s.name },
-                        { id: s.id }
-                    ]
+            // 2. Owner user
+            const owner = await prisma.user.upsert({
+                where: { email: 'owner@campusbites.com' },
+                update: { passwordHash },
+                create: {
+                    fullName: 'Campus Operations Lead',
+                    email: 'owner@campusbites.com',
+                    passwordHash
                 }
             });
+            await prisma.userRole.upsert({
+                where: { userId_roleId: { userId: owner.id, roleId: roleOwner.id } },
+                update: {},
+                create: { userId: owner.id, roleId: roleOwner.id }
+            });
 
-            if (!shop) {
-                shop = await prisma.shop.create({
-                    data: {
-                        name: s.name,
-                        ownerId: owner.id,
-                        areaId: area.id,
-                        status: 'ACTIVE'
+            // 3. Tech Admin user (for Tech Team Admin Access)
+            const admin = await prisma.user.upsert({
+                where: { email: 'admin@campusbites.com' },
+                update: { passwordHash, isActive: true },
+                create: {
+                    fullName: 'Tech Operations Admin',
+                    email: 'admin@campusbites.com',
+                    phone: '9876543210',
+                    passwordHash,
+                    isActive: true
+                }
+            });
+            await prisma.userRole.upsert({
+                where: { userId_roleId: { userId: admin.id, roleId: roleAdmin.id } },
+                update: {},
+                create: { userId: admin.id, roleId: roleAdmin.id }
+            });
+
+            // 4. Stalls and Mapped Staff
+            for (const s of STALL_CREDENTIALS) {
+                const area = await prisma.area.upsert({
+                    where: { name: s.areaName },
+                    update: {},
+                    create: { name: s.areaName, description: s.areaDesc }
+                });
+
+                let shop = await prisma.shop.findFirst({
+                    where: {
+                        OR: [
+                            { name: s.name },
+                            { id: s.id }
+                        ]
                     }
                 });
-            } else if (shop.status !== 'ACTIVE') {
-                await prisma.shop.update({
-                    where: { id: shop.id },
-                    data: { status: 'ACTIVE' }
+
+                if (!shop) {
+                    shop = await prisma.shop.create({
+                        data: {
+                            name: s.name,
+                            ownerId: owner.id,
+                            areaId: area.id,
+                            status: 'ACTIVE'
+                        }
+                    });
+                } else if (shop.status !== 'ACTIVE') {
+                    await prisma.shop.update({
+                        where: { id: shop.id },
+                        data: { status: 'ACTIVE' }
+                    });
+                }
+
+                // Create/update staff user
+                const staffUser = await prisma.user.upsert({
+                    where: { email: s.email },
+                    update: {
+                        fullName: `${s.name} Staff`,
+                        passwordHash,
+                        isActive: true
+                    },
+                    create: {
+                        fullName: `${s.name} Staff`,
+                        email: s.email,
+                        passwordHash,
+                        isActive: true
+                    }
+                });
+
+                // Assign STAFF role
+                await prisma.userRole.upsert({
+                    where: { userId_roleId: { userId: staffUser.id, roleId: roleStaff.id } },
+                    update: {},
+                    create: { userId: staffUser.id, roleId: roleStaff.id }
+                });
+
+                // Map Staff to this specific Shop in ShopStaff
+                await prisma.shopStaff.upsert({
+                    where: { shopId_staffId: { shopId: shop.id, staffId: staffUser.id } },
+                    update: {},
+                    create: { shopId: shop.id, staffId: staffUser.id }
                 });
             }
 
-            // Create/update staff user
-            const staffUser = await prisma.user.upsert({
-                where: { email: s.email },
-                update: {
-                    fullName: `${s.name} Staff`,
-                    passwordHash,
-                    isActive: true
-                },
-                create: {
-                    fullName: `${s.name} Staff`,
-                    email: s.email,
-                    passwordHash,
-                    isActive: true
-                }
-            });
+            // 5. Ensure Demo Students exist
+            for (const st of DEMO_STUDENTS) {
+                const studentUser = await prisma.user.upsert({
+                    where: { email: st.email },
+                    update: { fullName: st.fullName, phone: st.phone },
+                    create: {
+                        fullName: st.fullName,
+                        email: st.email,
+                        phone: st.phone,
+                        passwordHash,
+                        isActive: true
+                    }
+                });
+                await prisma.userRole.upsert({
+                    where: { userId_roleId: { userId: studentUser.id, roleId: roleCustomer.id } },
+                    update: {},
+                    create: { userId: studentUser.id, roleId: roleCustomer.id }
+                });
+            }
 
-            // Assign STAFF role
-            await prisma.userRole.upsert({
-                where: { userId_roleId: { userId: staffUser.id, roleId: roleStaff.id } },
-                update: {},
-                create: { userId: staffUser.id, roleId: roleStaff.id }
-            });
+            // 6. Seed rich realistic orders if count is low
+            const existingOrderCount = await prisma.order.count();
+            if (existingOrderCount < 35) {
+                await seedRealisticCampusOrders();
+            }
 
-            // Map Staff to this specific Shop in ShopStaff
-            await prisma.shopStaff.upsert({
-                where: { shopId_staffId: { shopId: shop.id, staffId: staffUser.id } },
-                update: {},
-                create: { shopId: shop.id, staffId: staffUser.id }
-            });
+            isStallStaffSeedVerified = true;
+            console.log('✅ Stall staff & admin credentials verified and mapped successfully');
+        } catch (error) {
+            console.error('Error ensuring stall staff seed:', error);
+        } finally {
+            seedInFlightPromise = null;
         }
+    })();
 
-        // 5. Ensure Demo Students exist
-        for (const st of DEMO_STUDENTS) {
-            const studentUser = await prisma.user.upsert({
-                where: { email: st.email },
-                update: { fullName: st.fullName, phone: st.phone },
-                create: {
-                    fullName: st.fullName,
-                    email: st.email,
-                    phone: st.phone,
-                    passwordHash,
-                    isActive: true
-                }
-            });
-            await prisma.userRole.upsert({
-                where: { userId_roleId: { userId: studentUser.id, roleId: roleCustomer.id } },
-                update: {},
-                create: { userId: studentUser.id, roleId: roleCustomer.id }
-            });
-        }
-
-        // 6. Seed rich realistic orders if count is low
-        const existingOrderCount = await prisma.order.count();
-        if (existingOrderCount < 35) {
-            await seedRealisticCampusOrders();
-        }
-
-        console.log('✅ Stall staff & admin credentials verified and mapped successfully');
-    } catch (error) {
-        console.error('Error ensuring stall staff seed:', error);
-    }
+    return seedInFlightPromise;
 }
 
 /**

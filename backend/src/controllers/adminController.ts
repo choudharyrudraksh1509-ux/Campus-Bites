@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../db/prisma';
 import { seedRealisticCampusOrders } from '../services/seedService';
+import { appCache } from '../services/cacheService';
 
 /**
  * ============================================================================
@@ -49,7 +50,7 @@ const VALID_ADMIN_TRANSITIONS: Record<string, string[]> = {
 
 /**
  * ============================================================================
- * 1. ADMIN OVERVIEW & CALCULATED STATISTICS REPORT (DATABASE-AGGREGATED)
+ * 1. ADMIN OVERVIEW & CALCULATED STATISTICS REPORT (SINGLE-STAGE PARALLELIZED)
  * ============================================================================
  */
 export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -67,28 +68,24 @@ export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Pr
             payments: { some: { status: 'SUCCESS' } }
         };
 
-        // Stage 1: Order volume counts
+        // Execute all independent database aggregations in a single parallel batch
         const [
-            totalOrders,
             todayOrders,
-            activeOrdersCount,
-            completedOrdersCount,
-            cancelledOrdersCount
-        ] = await Promise.all([
-            prisma.order.count(),
-            prisma.order.count({ where: { orderTime: { gte: startOfToday } } }),
-            prisma.order.count({ where: { status: { in: ['PLACED', 'PREPARING', 'READY', 'PAYMENT_PENDING'] } } }),
-            prisma.order.count({ where: { status: 'COMPLETED' } }),
-            prisma.order.count({ where: { status: { in: ['CANCELLED', 'PAYMENT_FAILED'] } } })
-        ]);
-
-        // Stage 2: Verified revenue aggregations & user counts
-        const [
             revenueAggregate,
             todayRevenueAggregate,
             totalUsers,
-            staffUsers
+            staffUsers,
+            allShops,
+            totalFoodItems,
+            dynamicPricingItems,
+            statusGroups,
+            paymentGroups,
+            shopStatusGroups,
+            shopCompletedRevenueGroups,
+            recentOrders,
+            topSoldItemGroups
         ] = await Promise.all([
+            prisma.order.count({ where: { orderTime: { gte: startOfToday } } }),
             prisma.order.aggregate({
                 where: verifiedPaidFilter,
                 _sum: { totalAmount: true },
@@ -102,15 +99,7 @@ export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Pr
                 _sum: { totalAmount: true }
             }),
             prisma.user.count(),
-            prisma.userRole.count({ where: { role: { name: 'STAFF' } } })
-        ]);
-
-        // Stage 3: Outlets & Catalog metrics
-        const [
-            allShops,
-            totalFoodItems,
-            dynamicPricingItems
-        ] = await Promise.all([
+            prisma.userRole.count({ where: { role: { name: 'STAFF' } } }),
             prisma.shop.findMany({
                 include: {
                     area: true,
@@ -119,16 +108,7 @@ export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Pr
                 }
             }),
             prisma.foodItem.count(),
-            prisma.foodItem.count({ where: { isDynamicPricing: true } })
-        ]);
-
-        // Stage 4: Order status, payment method & shop aggregations
-        const [
-            statusGroups,
-            paymentGroups,
-            shopStatusGroups,
-            shopCompletedRevenueGroups
-        ] = await Promise.all([
+            prisma.foodItem.count({ where: { isDynamicPricing: true } }),
             prisma.order.groupBy({
                 by: ['status'],
                 _count: { id: true }
@@ -148,21 +128,18 @@ export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Pr
                 _sum: { totalAmount: true },
                 _count: { id: true },
                 _avg: { estimatedMinutes: true }
-            })
-        ]);
-
-        // Stage 5: Trend history and top selling items
-        const [
-            recentOrders,
-            topSoldItemGroups
-        ] = await Promise.all([
+            }),
             prisma.order.findMany({
                 where: { orderTime: { gte: sevenDaysAgo } },
                 select: {
                     orderTime: true,
                     totalAmount: true,
                     status: true,
-                    payments: { select: { status: true } }
+                    payments: {
+                        where: { status: 'SUCCESS' },
+                        select: { status: true },
+                        take: 1
+                    }
                 }
             }),
             prisma.orderItem.groupBy({
@@ -178,13 +155,7 @@ export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Pr
             })
         ]);
 
-        const totalRevenue = revenueAggregate._sum.totalAmount || 0;
-        const todayRevenue = todayRevenueAggregate._sum.totalAmount || 0;
-        const averageOrderValue = completedOrdersCount > 0
-            ? Math.round(totalRevenue / completedOrdersCount)
-            : 0;
-
-        // Status counts mapping
+        // Status counts mapping & derived order totals (eliminating 4 redundant full-table count scans)
         const statusCounts: Record<string, number> = {
             'PLACED': 0,
             'PREPARING': 0,
@@ -194,9 +165,27 @@ export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Pr
             'PAYMENT_PENDING': 0,
             'PAYMENT_FAILED': 0
         };
+        let totalOrders = 0;
         statusGroups.forEach(g => {
             statusCounts[g.status] = g._count.id;
+            totalOrders += g._count.id;
         });
+
+        const activeOrdersCount =
+            (statusCounts['PLACED'] || 0) +
+            (statusCounts['PREPARING'] || 0) +
+            (statusCounts['READY'] || 0) +
+            (statusCounts['PAYMENT_PENDING'] || 0);
+        const completedOrdersCount = statusCounts['COMPLETED'] || 0;
+        const cancelledOrdersCount =
+            (statusCounts['CANCELLED'] || 0) +
+            (statusCounts['PAYMENT_FAILED'] || 0);
+
+        const totalRevenue = revenueAggregate._sum.totalAmount || 0;
+        const todayRevenue = todayRevenueAggregate._sum.totalAmount || 0;
+        const averageOrderValue = completedOrdersCount > 0
+            ? Math.round(totalRevenue / completedOrdersCount)
+            : 0;
 
         // Shop performance computation from database aggregations
         const shopOrderMap = new Map<number, { total: number; active: number }>();
@@ -267,46 +256,42 @@ export const getAdminOverviewStats = async (req: AuthRequest, res: Response): Pr
             });
         }
 
-        // Hourly Distribution (calculated for today)
+        // Hourly Distribution & 7-Day Daily Trend in a single O(N) pass
         const hourlyDistribution = Array.from({ length: 24 }, (_, hour) => ({ hour, ordersCount: 0, revenue: 0 }));
-        recentOrders.forEach(o => {
-            const orderTime = new Date(o.orderTime);
-            if (orderTime >= startOfToday) {
-                const hour = orderTime.getHours();
-                if (hour >= 0 && hour < 24) {
-                    hourlyDistribution[hour].ordersCount++;
-                    const isVerifiedPaid = o.status === 'COMPLETED' && o.payments.some(p => p.status === 'SUCCESS');
-                    if (isVerifiedPaid) {
-                        hourlyDistribution[hour].revenue += o.totalAmount;
-                    }
-                }
-            }
-        });
-
-        // Daily Trend for Last 7 Days
-        const dailyTrend: { date: string; dayLabel: string; ordersCount: number; revenue: number }[] = [];
+        const dailyTrendMap = new Map<string, { date: string; dayLabel: string; ordersCount: number; revenue: number }>();
         for (let i = 6; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
             const dateStr = d.toISOString().split('T')[0];
             const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-            const dayOrders = recentOrders.filter(o => {
-                const odStr = new Date(o.orderTime).toISOString().split('T')[0];
-                return odStr === dateStr;
-            });
-
-            const dayRevenue = dayOrders
-                .filter(o => o.status === 'COMPLETED' && o.payments.some(p => p.status === 'SUCCESS'))
-                .reduce((acc, o) => acc + o.totalAmount, 0);
-
-            dailyTrend.push({
-                date: dateStr,
-                dayLabel,
-                ordersCount: dayOrders.length,
-                revenue: dayRevenue
-            });
+            dailyTrendMap.set(dateStr, { date: dateStr, dayLabel, ordersCount: 0, revenue: 0 });
         }
+
+        recentOrders.forEach(o => {
+            const orderTime = new Date(o.orderTime);
+            const isVerifiedPaid = o.status === 'COMPLETED' && o.payments.length > 0;
+
+            if (orderTime >= startOfToday) {
+                const hour = orderTime.getHours();
+                if (hour >= 0 && hour < 24) {
+                    hourlyDistribution[hour].ordersCount++;
+                    if (isVerifiedPaid) {
+                        hourlyDistribution[hour].revenue += o.totalAmount;
+                    }
+                }
+            }
+
+            const odStr = orderTime.toISOString().split('T')[0];
+            const bucket = dailyTrendMap.get(odStr);
+            if (bucket) {
+                bucket.ordersCount++;
+                if (isVerifiedPaid) {
+                    bucket.revenue += o.totalAmount;
+                }
+            }
+        });
+
+        const dailyTrend = Array.from(dailyTrendMap.values());
 
         // Payment stats breakdown
         const paymentStatsArray = paymentGroups.map(g => {
@@ -517,6 +502,8 @@ export const updateOrderStatusByAdmin = async (req: AuthRequest, res: Response):
             data: { status }
         });
 
+        appCache.invalidate(`queue:shop:${existing.shopId}`, 'admin:stats');
+
         // Record audit log
         if (req.user?.userId) {
             await recordAuditLog(
@@ -540,28 +527,53 @@ export const updateOrderStatusByAdmin = async (req: AuthRequest, res: Response):
 
 /**
  * ============================================================================
- * 4. ALL STALLS MANAGEMENT (ADMIN)
+ * 4. ALL STALLS MANAGEMENT (DATABASE-AGGREGATED WITHOUT FULL ORDER LOADING)
  * ============================================================================
  */
 export const getAllStalls = async (_req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const shops = await prisma.shop.findMany({
-            include: {
-                area: true,
-                owner: true,
-                staff: { include: { staff: true } },
-                items: true,
-                orders: {
-                    select: { id: true, status: true, totalAmount: true, payments: { select: { status: true } } }
-                }
-            },
-            orderBy: { id: 'asc' }
+        const [shops, shopStatusGroups, shopRevenueGroups] = await Promise.all([
+            prisma.shop.findMany({
+                include: {
+                    area: true,
+                    owner: true,
+                    staff: { include: { staff: true } },
+                    _count: { select: { items: true } }
+                },
+                orderBy: { id: 'asc' }
+            }),
+            prisma.order.groupBy({
+                by: ['shopId', 'status'],
+                _count: { id: true }
+            }),
+            prisma.order.groupBy({
+                by: ['shopId'],
+                where: {
+                    status: 'COMPLETED',
+                    payments: { some: { status: 'SUCCESS' } }
+                },
+                _sum: { totalAmount: true }
+            })
+        ]);
+
+        const orderCountsMap = new Map<number, { total: number; active: number }>();
+        shopStatusGroups.forEach(sg => {
+            const curr = orderCountsMap.get(sg.shopId) || { total: 0, active: 0 };
+            curr.total += sg._count.id;
+            if (['PLACED', 'PREPARING', 'READY', 'PAYMENT_PENDING'].includes(sg.status)) {
+                curr.active += sg._count.id;
+            }
+            orderCountsMap.set(sg.shopId, curr);
+        });
+
+        const revenueMap = new Map<number, number>();
+        shopRevenueGroups.forEach(rg => {
+            revenueMap.set(rg.shopId, rg._sum.totalAmount || 0);
         });
 
         const mapped = shops.map(s => {
-            const completedOrders = s.orders.filter(o => o.status === 'COMPLETED' && o.payments.some(p => p.status === 'SUCCESS'));
-            const activeOrders = s.orders.filter(o => ['PLACED', 'PREPARING', 'READY', 'PAYMENT_PENDING'].includes(o.status));
-            const revenue = completedOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+            const counts = orderCountsMap.get(s.id) || { total: 0, active: 0 };
+            const revenue = revenueMap.get(s.id) || 0;
 
             return {
                 id: s.id,
@@ -574,10 +586,10 @@ export const getAllStalls = async (_req: AuthRequest, res: Response): Promise<vo
                 owner_email: s.owner?.email,
                 isClosingSoon: Boolean(s.isClosingSoon),
                 closingDiscount: s.closingDiscount || 0,
-                totalOrders: s.orders.length,
-                activeOrders: activeOrders.length,
+                totalOrders: counts.total,
+                activeOrders: counts.active,
                 revenue,
-                menuItemsCount: s.items.length,
+                menuItemsCount: s._count.items,
                 staff: s.staff.map(st => ({
                     id: st.staff.id,
                     name: st.staff.fullName,
@@ -615,13 +627,14 @@ export const createStallByAdmin = async (req: AuthRequest, res: Response): Promi
             return;
         }
 
-        const area = await prisma.area.findUnique({ where: { id: Number(areaId) } });
+        const [area, owner] = await Promise.all([
+            prisma.area.findUnique({ where: { id: Number(areaId) } }),
+            prisma.user.findUnique({ where: { id: Number(ownerId) } })
+        ]);
         if (!area) {
             res.status(400).json({ error: 'Specified area not found' });
             return;
         }
-
-        const owner = await prisma.user.findUnique({ where: { id: Number(ownerId) } });
         if (!owner) {
             res.status(400).json({ error: 'Specified owner user not found' });
             return;
@@ -636,6 +649,8 @@ export const createStallByAdmin = async (req: AuthRequest, res: Response): Promi
             },
             include: { area: true, owner: true }
         });
+
+        appCache.invalidate('shops:', 'staff:', 'admin:');
 
         if (req.user?.userId) {
             await recordAuditLog(
@@ -710,6 +725,8 @@ export const updateStallByAdmin = async (req: AuthRequest, res: Response): Promi
             data: updateData,
             include: { area: true, owner: true }
         });
+
+        appCache.invalidate('shops:', 'staff:', 'admin:');
 
         if (req.user?.userId) {
             await recordAuditLog(
@@ -942,6 +959,8 @@ export const updateUserRole = async (req: AuthRequest, res: Response): Promise<v
             }
         }
 
+        appCache.invalidate(`auth:me:${uId}`, `staff:shop:${uId}`, 'admin:stats');
+
         if (req.user?.userId) {
             await recordAuditLog(
                 req.user.userId,
@@ -1005,6 +1024,8 @@ export const updateUserStatus = async (req: AuthRequest, res: Response): Promise
             where: { id: uId },
             data: { isActive }
         });
+
+        appCache.invalidate(`auth:me:${uId}`, 'admin:stats');
 
         if (req.user?.userId) {
             await recordAuditLog(
@@ -1083,7 +1104,7 @@ export const getAuditLogs = async (req: AuthRequest, res: Response): Promise<voi
 
 /**
  * ============================================================================
- * 13. COMPREHENSIVE REPORTS ENDPOINT
+ * 13. COMPREHENSIVE REPORTS ENDPOINT (CONCURRENT PARALLEL AGGREGATION)
  * ============================================================================
  */
 export const getAdminReports = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -1104,45 +1125,63 @@ export const getAdminReports = async (req: AuthRequest, res: Response): Promise<
             }
         }
 
-        // 1. Status breakdown
-        const statusGroups = await prisma.order.groupBy({
-            by: ['status'],
-            where,
-            _count: { id: true }
-        });
+        // Execute all 6 report queries concurrently instead of sequentially
+        const [
+            statusGroups,
+            outletOrders,
+            verifiedRevenueByOutlet,
+            cancelledByOutlet,
+            shops,
+            ordersForDaily
+        ] = await Promise.all([
+            prisma.order.groupBy({
+                by: ['status'],
+                where,
+                _count: { id: true }
+            }),
+            prisma.order.groupBy({
+                by: ['shopId'],
+                where,
+                _count: { id: true }
+            }),
+            prisma.order.groupBy({
+                by: ['shopId'],
+                where: {
+                    ...where,
+                    status: 'COMPLETED',
+                    payments: { some: { status: 'SUCCESS' } }
+                },
+                _sum: { totalAmount: true },
+                _count: { id: true }
+            }),
+            prisma.order.groupBy({
+                by: ['shopId'],
+                where: {
+                    ...where,
+                    status: { in: ['CANCELLED', 'PAYMENT_FAILED'] }
+                },
+                _count: { id: true }
+            }),
+            prisma.shop.findMany({
+                include: { area: true }
+            }),
+            prisma.order.findMany({
+                where,
+                select: {
+                    orderTime: true,
+                    totalAmount: true,
+                    status: true,
+                    payments: {
+                        where: { status: 'SUCCESS' },
+                        select: { status: true },
+                        take: 1
+                    }
+                },
+                orderBy: { orderTime: 'asc' }
+            })
+        ]);
 
-        // 2. Orders per outlet
-        const outletOrders = await prisma.order.groupBy({
-            by: ['shopId'],
-            where,
-            _count: { id: true }
-        });
-
-        const verifiedRevenueByOutlet = await prisma.order.groupBy({
-            by: ['shopId'],
-            where: {
-                ...where,
-                status: 'COMPLETED',
-                payments: { some: { status: 'SUCCESS' } }
-            },
-            _sum: { totalAmount: true },
-            _count: { id: true }
-        });
-
-        const cancelledByOutlet = await prisma.order.groupBy({
-            by: ['shopId'],
-            where: {
-                ...where,
-                status: { in: ['CANCELLED', 'PAYMENT_FAILED'] }
-            },
-            _count: { id: true }
-        });
-
-        const shops = await prisma.shop.findMany({
-            include: { area: true }
-        });
         const shopMap = new Map(shops.map(s => [s.id, s]));
-
         const revMap = new Map(verifiedRevenueByOutlet.map(r => [r.shopId, r._sum.totalAmount || 0]));
         const compMap = new Map(verifiedRevenueByOutlet.map(r => [r.shopId, r._count.id || 0]));
         const cancMap = new Map(cancelledByOutlet.map(c => [c.shopId, c._count.id || 0]));
@@ -1160,18 +1199,6 @@ export const getAdminReports = async (req: AuthRequest, res: Response): Promise<
             };
         }).sort((a, b) => b.verifiedRevenue - a.verifiedRevenue);
 
-        // 3. Orders per day & Verified revenue trend
-        const ordersForDaily = await prisma.order.findMany({
-            where,
-            select: {
-                orderTime: true,
-                totalAmount: true,
-                status: true,
-                payments: { select: { status: true } }
-            },
-            orderBy: { orderTime: 'asc' }
-        });
-
         const dailyAgg: Record<string, {
             date: string;
             dayLabel: string;
@@ -1180,6 +1207,9 @@ export const getAdminReports = async (req: AuthRequest, res: Response): Promise<
             cancelledOrders: number;
             verifiedRevenue: number;
         }> = {};
+
+        let totalVerifiedRevenue = 0;
+        let totalCancelled = 0;
 
         ordersForDaily.forEach(o => {
             const d = new Date(o.orderTime);
@@ -1198,19 +1228,21 @@ export const getAdminReports = async (req: AuthRequest, res: Response): Promise<
             }
 
             dailyAgg[dateStr].totalOrders++;
-            const isVerifiedPaid = o.status === 'COMPLETED' && o.payments.some(p => p.status === 'SUCCESS');
+            const isVerifiedPaid = o.status === 'COMPLETED' && o.payments.length > 0;
             if (isVerifiedPaid) {
                 dailyAgg[dateStr].completedOrders++;
                 dailyAgg[dateStr].verifiedRevenue += o.totalAmount;
+                totalVerifiedRevenue += o.totalAmount;
             }
             if (o.status === 'CANCELLED' || o.status === 'PAYMENT_FAILED') {
                 dailyAgg[dateStr].cancelledOrders++;
+                totalCancelled++;
             }
         });
 
         const ordersPerDay = Object.values(dailyAgg).sort((a, b) => a.date.localeCompare(b.date));
 
-        // 4. Status distribution summary
+        // Status distribution summary
         const totalFilteredOrders = ordersForDaily.length;
         const statusDistribution = statusGroups.map(g => ({
             status: g.status,
@@ -1218,13 +1250,6 @@ export const getAdminReports = async (req: AuthRequest, res: Response): Promise<
             percentage: totalFilteredOrders > 0 ? Math.round((g._count.id / totalFilteredOrders) * 100) : 0
         }));
 
-        // 5. Total verified revenue in this period
-        const totalVerifiedRevenue = ordersForDaily
-            .filter(o => o.status === 'COMPLETED' && o.payments.some(p => p.status === 'SUCCESS'))
-            .reduce((sum, o) => sum + o.totalAmount, 0);
-
-        // 6. Cancellation trends
-        const totalCancelled = ordersForDaily.filter(o => o.status === 'CANCELLED' || o.status === 'PAYMENT_FAILED').length;
         const cancellationRate = totalFilteredOrders > 0 ? Math.round((totalCancelled / totalFilteredOrders) * 100) : 0;
 
         res.json({
@@ -1262,6 +1287,7 @@ export const getAdminReports = async (req: AuthRequest, res: Response): Promise<
 export const seedRealtimeDataEndpoint = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const createdCount = await seedRealisticCampusOrders();
+        appCache.invalidate('shops:', 'staff:', 'admin:', 'queue:');
 
         if (req.user?.userId) {
             await recordAuditLog(

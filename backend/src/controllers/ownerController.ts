@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest, isAuthorizedForShop } from '../middleware/auth';
 import prisma from '../db/prisma';
+import { appCache } from '../services/cacheService';
 
 export const addMenuItem = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -15,10 +16,11 @@ export const addMenuItem = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
-        const shop = await prisma.shop.findUnique({ where: { id: targetShopId } });
+        const [shop, category] = await Promise.all([
+            prisma.shop.findUnique({ where: { id: targetShopId } }),
+            prisma.category.findUnique({ where: { id: Number(categoryId) } })
+        ]);
         if (!shop) { res.status(404).json({ error: 'Stall not found' }); return; }
-
-        const category = await prisma.category.findUnique({ where: { id: Number(categoryId) } });
         if (!category) { res.status(404).json({ error: 'Category not found' }); return; }
 
         const item = await prisma.foodItem.create({
@@ -31,6 +33,8 @@ export const addMenuItem = async (req: AuthRequest, res: Response): Promise<void
                 isAvailable: isAvailable ?? true
             }
         });
+
+        appCache.invalidate('shops:', 'staff:', 'admin:');
 
         res.status(201).json({ message: 'Item added successfully', itemId: item.id });
     } catch (error) {
@@ -68,6 +72,8 @@ export const updateMenuItem = async (req: AuthRequest, res: Response): Promise<v
             }
         });
 
+        appCache.invalidate('shops:', 'staff:', 'admin:');
+
         res.json({ message: 'Item updated successfully', item: updated });
     } catch (error) {
         console.error('Update menu item error:', error);
@@ -104,9 +110,11 @@ export const deleteMenuItem = async (req: AuthRequest, res: Response): Promise<v
                 where: { id: itemId },
                 data: { isAvailable: false }
             });
+            appCache.invalidate('shops:', 'staff:', 'admin:');
             res.json({ message: 'Item has order history — marked as unavailable instead of deleting' });
         } else {
             await prisma.foodItem.delete({ where: { id: itemId } });
+            appCache.invalidate('shops:', 'staff:', 'admin:');
             res.json({ message: 'Item deleted successfully' });
         }
     } catch (error) {
@@ -191,6 +199,8 @@ export const updateOwnerShopStatus = async (req: AuthRequest, res: Response): Pr
             where: { id: shop.id },
             data: { status: status || 'ACTIVE' }
         });
+
+        appCache.invalidate('shops:', 'staff:', 'admin:');
 
         res.json({ message: `Stall status updated to ${updated.status}`, shop: updated });
     } catch (error) {

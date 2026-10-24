@@ -125,7 +125,7 @@ async function runVerification() {
 
     // B. Find an active shop and available item
     const shop = await prisma.shop.findFirst({
-      where: { status: 'ACTIVE' },
+      where: { status: 'ACTIVE', items: { some: { isAvailable: true } } },
       include: { items: { where: { isAvailable: true } } }
     });
     if (!shop || shop.items.length === 0) throw new Error('No active shop with items found');

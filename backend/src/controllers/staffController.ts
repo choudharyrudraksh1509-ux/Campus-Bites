@@ -2,43 +2,47 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import prisma from '../db/prisma';
 import { ALLOWED_ORDER_TRANSITIONS } from '../services/orderStateMachine';
+import { appCache } from '../services/cacheService';
 
 // Valid state transitions per architecture Section 8
 const VALID_TRANSITIONS: Record<string, string[]> = ALLOWED_ORDER_TRANSITIONS;
 
 /**
- * Helper to resolve the staff member's assigned shop reliably
+ * Helper to resolve the staff member's assigned shop reliably (with short-TTL cache)
  */
 export const getStaffAssignedShop = async (staffId: number, reqUserShopId?: number) => {
-    if (reqUserShopId) {
-        const shop = await prisma.shop.findUnique({ where: { id: reqUserShopId }, include: { area: true } });
-        if (shop) return shop;
-    }
-    const ss = await prisma.shopStaff.findFirst({
-        where: { staffId },
-        include: { shop: { include: { area: true } } }
-    });
-    if (ss?.shop) return ss.shop;
-
-    // Fallback: match by email slug if shopStaff link is missing
-    const user = await prisma.user.findUnique({ where: { id: staffId } });
-    if (user) {
-        const slug = user.email.toLowerCase().split('@')[0].replace('staff.', '');
-        const allShops = await prisma.shop.findMany({ include: { area: true } });
-        const matched = allShops.find(s => {
-            const sSlug = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            return sSlug.includes(slug) || slug.includes(sSlug);
-        });
-        if (matched) {
-            await prisma.shopStaff.upsert({
-                where: { shopId_staffId: { shopId: matched.id, staffId } },
-                update: {},
-                create: { shopId: matched.id, staffId }
-            });
-            return matched;
+    const cacheKey = `staff:shop:${staffId}:${reqUserShopId || 0}`;
+    return appCache.getOrSet(cacheKey, 15000, async () => {
+        if (reqUserShopId) {
+            const shop = await prisma.shop.findUnique({ where: { id: reqUserShopId }, include: { area: true } });
+            if (shop) return shop;
         }
-    }
-    return null;
+        const ss = await prisma.shopStaff.findFirst({
+            where: { staffId },
+            include: { shop: { include: { area: true } } }
+        });
+        if (ss?.shop) return ss.shop;
+
+        // Fallback: match by email slug if shopStaff link is missing
+        const user = await prisma.user.findUnique({ where: { id: staffId } });
+        if (user) {
+            const slug = user.email.toLowerCase().split('@')[0].replace('staff.', '');
+            const allShops = await prisma.shop.findMany({ include: { area: true } });
+            const matched = allShops.find(s => {
+                const sSlug = s.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return sSlug.includes(slug) || slug.includes(sSlug);
+            });
+            if (matched) {
+                await prisma.shopStaff.upsert({
+                    where: { shopId_staffId: { shopId: matched.id, staffId } },
+                    update: {},
+                    create: { shopId: matched.id, staffId }
+                });
+                return matched;
+            }
+        }
+        return null;
+    });
 };
 
 // ==========================================
@@ -165,11 +169,13 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
 
         if (!status) { res.status(400).json({ error: 'Status is required' }); return; }
 
-        const order = await prisma.order.findUnique({ where: { id: Number(orderId) } });
+        const [order, shop] = await Promise.all([
+            prisma.order.findUnique({ where: { id: Number(orderId) } }),
+            getStaffAssignedShop(staffId, req.user?.shopId)
+        ]);
         if (!order) { res.status(404).json({ error: 'Order not found' }); return; }
 
         // Verify stall authorization: staff can ONLY update orders for their assigned stall
-        const shop = await getStaffAssignedShop(staffId, req.user?.shopId);
         if (!shop || order.shopId !== shop.id) {
             res.status(403).json({ error: 'Unauthorized: You can only update orders for your assigned stall' });
             return;
@@ -188,6 +194,8 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
             where: { id: Number(orderId) },
             data: { status }
         });
+
+        appCache.invalidate('queue:', 'admin:stats');
         
         res.json({ message: `Order status updated: ${order.status} → ${status}`, orderId: updated.id, status: updated.status, order: updated });
     } catch (error: any) {
@@ -301,6 +309,8 @@ export const addStaffMenuItem = async (req: AuthRequest, res: Response): Promise
             include: { category: true }
         });
 
+        appCache.invalidate('shops:', 'staff:', 'admin:');
+
         res.status(201).json({
             message: 'Menu item created successfully',
             item: {
@@ -385,6 +395,8 @@ export const updateStaffMenuItem = async (req: AuthRequest, res: Response): Prom
             include: { category: true }
         });
 
+        appCache.invalidate('shops:', 'staff:', 'admin:');
+
         let cleanDescription = updated.description || '';
         let retQty: number | null = null;
         const match = cleanDescription.match(/\[Qty:\s*(\d+)\]/i);
@@ -439,9 +451,11 @@ export const deleteStaffMenuItem = async (req: AuthRequest, res: Response): Prom
                 where: { id: iId },
                 data: { isAvailable: false }
             });
+            appCache.invalidate('shops:', 'staff:', 'admin:');
             res.json({ message: 'Item has prior orders; marked as unavailable' });
         } else {
             await prisma.foodItem.delete({ where: { id: iId } });
+            appCache.invalidate('shops:', 'staff:', 'admin:');
             res.json({ message: 'Menu item deleted successfully' });
         }
     } catch (error: any) {
@@ -457,10 +471,11 @@ export const getStaffStallInfo = async (req: AuthRequest, res: Response): Promis
         const staffId = req.user?.userId;
         if (!staffId) { res.status(401).json({ error: 'Unauthorized' }); return; }
 
-        const shop = await getStaffAssignedShop(staffId, req.user?.shopId);
+        const [shop, staffUser] = await Promise.all([
+            getStaffAssignedShop(staffId, req.user?.shopId),
+            prisma.user.findUnique({ where: { id: staffId } })
+        ]);
         if (!shop) { res.status(404).json({ error: 'No stall found' }); return; }
-
-        const staffUser = await prisma.user.findUnique({ where: { id: staffId } });
 
         res.json({
             stall: {
@@ -503,6 +518,8 @@ export const updateStaffStallInfo = async (req: AuthRequest, res: Response): Pro
             include: { area: true }
         });
 
+        appCache.invalidate('shops:', 'staff:', 'admin:');
+
         res.json({
             message: 'Stall updated successfully',
             stall: {
@@ -519,7 +536,9 @@ export const updateStaffStallInfo = async (req: AuthRequest, res: Response): Pro
 
 export const getCategories = async (_req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } });
+        const categories = await appCache.getOrSet('categories:all', 60000, () =>
+            prisma.category.findMany({ orderBy: { name: 'asc' } })
+        );
         res.json(categories);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch categories' });
@@ -527,7 +546,7 @@ export const getCategories = async (_req: AuthRequest, res: Response): Promise<v
 };
 
 // ==========================================
-// 6. DYNAMIC PRICING & CLOSING CLEARANCE
+// 6. DYNAMIC PRICING & CLOSING CLEARANCE (BATCHED TRANSACTION)
 // ==========================================
 export const toggleClosingClearance = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -541,17 +560,20 @@ export const toggleClosingClearance = async (req: AuthRequest, res: Response): P
         const closingDiscount = Number(discountPercent) || 25;
 
         if (isClosingSoon) {
-            await prisma.shop.update({
-                where: { id: shop.id },
-                data: {
-                    isClosingSoon: true,
-                    closingDiscount: closingDiscount
-                }
+            const items = await prisma.foodItem.findMany({
+                where: { shopId: shop.id, isAvailable: true },
+                select: { id: true, price: true, originalPrice: true, description: true }
             });
 
-            const items = await prisma.foodItem.findMany({
-                where: { shopId: shop.id, isAvailable: true }
-            });
+            const txOps: any[] = [
+                prisma.shop.update({
+                    where: { id: shop.id },
+                    data: {
+                        isClosingSoon: true,
+                        closingDiscount: closingDiscount
+                    }
+                })
+            ];
 
             for (const item of items) {
                 let hasSurplus = true;
@@ -566,17 +588,22 @@ export const toggleClosingClearance = async (req: AuthRequest, res: Response): P
                     const baseOriginal = (item.originalPrice && item.originalPrice > 0) ? item.originalPrice : item.price;
                     const discounted = Math.max(5, Math.round(baseOriginal * (1 - closingDiscount / 100)));
 
-                    await prisma.foodItem.update({
-                        where: { id: item.id },
-                        data: {
-                            originalPrice: baseOriginal,
-                            price: discounted,
-                            discountPercent: closingDiscount,
-                            isDynamicPricing: true
-                        }
-                    });
+                    txOps.push(
+                        prisma.foodItem.update({
+                            where: { id: item.id },
+                            data: {
+                                originalPrice: baseOriginal,
+                                price: discounted,
+                                discountPercent: closingDiscount,
+                                isDynamicPricing: true
+                            }
+                        })
+                    );
                 }
             }
+
+            await prisma.$transaction(txOps);
+            appCache.invalidate('shops:', 'staff:', 'admin:');
 
             res.json({
                 message: `Closing clearance sale active: ${closingDiscount}% discount applied to items`,
@@ -584,29 +611,37 @@ export const toggleClosingClearance = async (req: AuthRequest, res: Response): P
                 closingDiscount
             });
         } else {
-            await prisma.shop.update({
-                where: { id: shop.id },
-                data: {
-                    isClosingSoon: false,
-                    closingDiscount: 0
-                }
+            const items = await prisma.foodItem.findMany({
+                where: { shopId: shop.id },
+                select: { id: true, price: true, originalPrice: true }
             });
 
-            const items = await prisma.foodItem.findMany({
-                where: { shopId: shop.id }
-            });
+            const txOps: any[] = [
+                prisma.shop.update({
+                    where: { id: shop.id },
+                    data: {
+                        isClosingSoon: false,
+                        closingDiscount: 0
+                    }
+                })
+            ];
 
             for (const item of items) {
                 const regularPrice = (item.originalPrice && item.originalPrice > 0) ? item.originalPrice : item.price;
-                await prisma.foodItem.update({
-                    where: { id: item.id },
-                    data: {
-                        price: regularPrice,
-                        discountPercent: 0,
-                        isDynamicPricing: false
-                    }
-                });
+                txOps.push(
+                    prisma.foodItem.update({
+                        where: { id: item.id },
+                        data: {
+                            price: regularPrice,
+                            discountPercent: 0,
+                            isDynamicPricing: false
+                        }
+                    })
+                );
             }
+
+            await prisma.$transaction(txOps);
+            appCache.invalidate('shops:', 'staff:', 'admin:');
 
             res.json({
                 message: 'Closing clearance ended. Regular menu prices restored.',
@@ -656,6 +691,8 @@ export const toggleItemDynamicPricing = async (req: AuthRequest, res: Response):
                 include: { category: true }
             });
 
+            appCache.invalidate('shops:', 'staff:', 'admin:');
+
             res.json({
                 message: `Surplus discount of ${pct}% applied to ${updated.name}`,
                 item: {
@@ -678,6 +715,8 @@ export const toggleItemDynamicPricing = async (req: AuthRequest, res: Response):
                 },
                 include: { category: true }
             });
+
+            appCache.invalidate('shops:', 'staff:', 'admin:');
 
             res.json({
                 message: `Surplus discount removed for ${updated.name}`,

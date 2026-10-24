@@ -13,7 +13,6 @@ async function main() {
   const roleOwner = await prisma.role.upsert({ where: { name: 'OWNER' }, update: {}, create: { name: 'OWNER' } });
 
   // Users
-
   const staff = await prisma.user.upsert({
     where: { email: 'staff@campusbites.com' },
     update: {},
@@ -147,6 +146,17 @@ async function main() {
     }
   };
 
+  // --- SEED GAZEBO 1 ---
+  await addItem(g1.id, catBurgers.id, 'Crispy Veg Cheese Burger', 85, 'Golden veg patty with melted cheddar');
+  await addItem(g1.id, catBurgers.id, 'Paneer Loaded Fries', 95, 'Seasoned fries topped with spiced paneer');
+  await addItem(g1.id, catSnacks.id, 'Double Cheese Pizza', 150, 'Freshly baked pan pizza with extra mozzarella');
+  await addItem(g1.id, catDrinks.id, 'Cold Coffee with Ice Cream', 70, 'Chilled espresso blended with vanilla scoop');
+
+  // --- SEED GAZEBO 2 ---
+  await addItem(g2.id, catRolls.id, 'Chicken Kathi Roll', 110, 'Spiced chicken tikka wrapped in flaky paratha');
+  await addItem(g2.id, catBurgers.id, 'Chicken Cheese Burger', 110, 'Juicy grilled chicken patty with cheese');
+  await addItem(g2.id, catSnacks.id, 'Hot & Spicy Wings', 140, 'Crispy chicken wings tossed in hot glaze');
+
   // --- SEED FRESH JUICES (HEALTHY & TASTY PRICE LIST) ---
   const fjItems = [
     // Drinks
@@ -222,6 +232,16 @@ async function main() {
   await addItem(nsDiner.id, catMains.id, 'Special Chole Bhature (2 Pcs)', 80, 'Spicy Punjabi chole with fluffy bhaturas');
   await addItem(nsDiner.id, catMains.id, 'Rajma Chawal Bowl', 80, 'Homestyle rajma served with steamed rice');
   await addItem(nsDiner.id, catChaat.id, 'Bombay Pav Bhaji', 70, 'Buttery mashed veg curry with toasted pav');
+
+  // --- SEED CAMPUS BAKERS ---
+  await addItem(bakers.id, catSnacks.id, 'Grilled Veg Sandwich', 60, 'Toasted sandwich with garden veggies');
+  await addItem(bakers.id, catSnacks.id, 'Paneer Tikka Sandwich', 85, 'Spiced paneer cubes grilled in jumbo bread');
+  await addItem(bakers.id, catSnacks.id, 'Chocolate Brownie', 50, 'Warm fudge brownie with walnut chunks');
+
+  // --- SEED SOUTH CORNER ---
+  await addItem(southCorner.id, catDosa.id, 'Masala Dosa', 60, 'Crispy golden dosa with potato masala');
+  await addItem(southCorner.id, catDosa.id, 'Ghee Podi Idli (4 Pcs)', 55, 'Mini idlis tossed in roasted podi & ghee');
+  await addItem(southCorner.id, catDosa.id, 'Medu Vada (2 Pcs)', 40, 'Crispy lentil vadas served with sambar & chutney');
 
   // --- SEED HUNGER ---
   await addItem(hunger.id, catRolls.id, 'Classic Veg Frankie Roll', 60, 'Spiced veg patty roll in kathi paratha');

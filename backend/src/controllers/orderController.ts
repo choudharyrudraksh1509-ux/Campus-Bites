@@ -8,6 +8,7 @@ import {
     processPaymentWebhook,
     WebhookPayload 
 } from '../services/paymentService';
+import { appCache } from '../services/cacheService';
 
 // Re-export Autobook schedules handlers for backward compatibility
 export {
@@ -206,11 +207,23 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
     }
 
     const targetShopId = Number(shopId);
+    const itemIds = items.map((i: any) => Number(i.itemId));
 
     try {
         const orderResult = await prisma.$transaction(async (tx) => {
-            // Validate stall
-            const shop = await tx.shop.findUnique({ where: { id: targetShopId } });
+            // Parallelize all read validations inside the transaction
+            const [shop, customer, foods, activeOrdersCount] = await Promise.all([
+                tx.shop.findUnique({ where: { id: targetShopId } }),
+                tx.user.findUnique({ where: { id: userId }, select: { id: true, isActive: true } }),
+                tx.foodItem.findMany({ where: { id: { in: itemIds } } }),
+                tx.order.count({
+                    where: {
+                        shopId: targetShopId,
+                        status: { in: ['PLACED', 'PREPARING'] }
+                    }
+                })
+            ]);
+
             if (!shop) {
                 throw new Error('NOT_FOUND: Stall does not exist');
             }
@@ -218,8 +231,6 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
                 throw new Error('STALL_INACTIVE: This stall is currently closed and not accepting orders');
             }
 
-            // Validate user active status
-            const customer = await tx.user.findUnique({ where: { id: userId } });
             if (!customer || !customer.isActive) {
                 throw new Error('USER_INACTIVE: Customer account is disabled or inactive');
             }
@@ -228,8 +239,6 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
             const orderItemsData = [];
             let maxPrepTime = 8;
 
-            const itemIds = items.map((i: any) => Number(i.itemId));
-            const foods = await tx.foodItem.findMany({ where: { id: { in: itemIds } } });
             const foodMap = new Map(foods.map(f => [f.id, f]));
 
             for (const item of items) {
@@ -293,13 +302,6 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
                 }
             }
 
-            // Calculate live queue for this shop
-            const activeOrdersCount = await tx.order.count({
-                where: {
-                    shopId: shop.id,
-                    status: { in: ['PLACED', 'PREPARING'] }
-                }
-            });
             const queueNumber = activeOrdersCount + 1;
             const queueWaitMinutes = activeOrdersCount * 3;
             const estimatedMinutes = maxPrepTime + queueWaitMinutes;
@@ -345,6 +347,8 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
             maxWait: 10000,
             timeout: 30000
         });
+
+        appCache.invalidate(`queue:shop:${targetShopId}`, 'admin:stats');
 
         res.status(201).json(formatOrderResponse(orderResult.newOrder, orderResult.maxPrepTime, orderResult.isDuplicate));
     } catch (error: any) {
@@ -623,6 +627,8 @@ export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void
             return o;
         });
 
+        appCache.invalidate(`queue:shop:${order.shopId}`, 'admin:stats');
+
         res.json({
             message: 'Order cancelled successfully',
             orderId: updated.id,
@@ -703,6 +709,8 @@ export const confirmPayment = async (req: AuthRequest, res: Response): Promise<v
             });
         });
 
+        appCache.invalidate(`queue:shop:${order.shopId}`, 'admin:stats');
+
         res.json({
             message: 'Payment confirmed. Order is now PLACED.',
             orderId: oId,
@@ -744,6 +752,7 @@ export const handlePaymentWebhook = async (req: any, res: Response): Promise<voi
         }
 
         const result = await processPaymentWebhook(payload);
+        appCache.invalidate('queue:', 'admin:stats');
         res.status(200).json(result);
     } catch (error: any) {
         const msg = error.message || '';
@@ -759,17 +768,19 @@ export const handlePaymentWebhook = async (req: any, res: Response): Promise<voi
 };
 
 /**
- * Queue & Estimation per Shop
+ * Queue & Estimation per Shop (with single-flight short-TTL cache)
  */
 export const getShopQueueEstimate = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const shopId = Number(req.params.shopId);
-        const activeOrdersCount = await prisma.order.count({
-            where: {
-                shopId,
-                status: { in: ['PLACED', 'PREPARING'] }
-            }
-        });
+        const activeOrdersCount = await appCache.getOrSet(`queue:shop:${shopId}`, 3000, () =>
+            prisma.order.count({
+                where: {
+                    shopId,
+                    status: { in: ['PLACED', 'PREPARING'] }
+                }
+            })
+        );
         const queueNumber = activeOrdersCount + 1;
         const basePrepMinutes = 10;
         const queueDelayMinutes = activeOrdersCount * 3;
