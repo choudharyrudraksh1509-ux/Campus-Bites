@@ -55,16 +55,23 @@ export default function Home() {
     api.get('/shops')
       .then(res => {
         if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-          const enriched = res.data.map((s: any) => {
-            const match = MOCK_CAMPUS_SHOPS.find(m => m.name.toLowerCase() === s.name.toLowerCase());
-            return {
-              ...s,
-              area_name: s.area?.name || match?.area_name || 'Campus Outlet',
-              rating: match?.rating || 4.8,
-              waitTime: match?.waitTime || '8-12 mins',
-              tags: match?.tags || ['Takeaway', 'Campus']
-            };
-          });
+          const isTestStall = (name: string) => {
+            const lower = (name || '').toLowerCase();
+            return lower.includes('test stall') || lower.includes('uat acceptance') || lower.startsWith('admin test');
+          };
+
+          const enriched = res.data
+            .filter((s: any) => !isTestStall(s.name))
+            .map((s: any) => {
+              const match = MOCK_CAMPUS_SHOPS.find(m => m.name.toLowerCase() === s.name.toLowerCase());
+              return {
+                ...s,
+                area_name: s.area?.name || match?.area_name || 'Campus Outlet',
+                rating: match?.rating || 4.8,
+                waitTime: match?.waitTime || '8-12 mins',
+                tags: match?.tags || ['Takeaway', 'Campus']
+              };
+            });
           setShops(enriched);
         } else {
           // Empty response from backend database

@@ -747,6 +747,38 @@ export const updateStallByAdmin = async (req: AuthRequest, res: Response): Promi
     }
 };
 
+export const deleteStallByAdmin = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const sId = Number(req.params.shopId);
+        const existing = await prisma.shop.findUnique({ where: { id: sId } });
+        if (!existing) {
+            res.status(404).json({ error: 'Stall not found' });
+            return;
+        }
+
+        // Clean up associated items and staff relations before deleting the shop
+        await prisma.shopStaff.deleteMany({ where: { shopId: sId } });
+        await prisma.foodItem.deleteMany({ where: { shopId: sId } });
+        await prisma.shop.delete({ where: { id: sId } });
+
+        appCache.invalidate('shops:', 'staff:', 'admin:');
+
+        if (req.user?.userId) {
+            await recordAuditLog(
+                req.user.userId,
+                'DELETE_STALL',
+                'SHOP',
+                sId,
+                `Deleted outlet "${existing.name}" (ID #${sId})`
+            );
+        }
+
+        res.json({ message: `Outlet "${existing.name}" deleted successfully` });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message || 'Failed to delete outlet' });
+    }
+};
+
 /**
  * ============================================================================
  * 7. VIEW STAFF ASSIGNED TO OUTLET

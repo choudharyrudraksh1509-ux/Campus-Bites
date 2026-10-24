@@ -34,7 +34,8 @@ import {
   Power,
   Edit3,
   UserX,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Trash2
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -593,6 +594,29 @@ export default function AdminDashboard() {
     });
   };
 
+  // Stall delete with confirmation
+  const promptDeleteStall = (shopId: number, shopName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: `Delete Outlet "${shopName}"`,
+      message: `Are you sure you want to permanently delete "${shopName}"? This will remove all associated food items and staff linkages.`,
+      confirmLabel: 'Delete Outlet',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/admin/stalls/${shopId}`);
+          showToast(`Outlet "${shopName}" deleted successfully`);
+          fetchStalls();
+          fetchStats();
+        } catch (err: any) {
+          showToast(err.response?.data?.error || 'Failed to delete outlet');
+        } finally {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  };
+
   // Stall closing clearance toggle
   const handleToggleStallClearance = async (shopId: number, isClosingSoon: boolean) => {
     try {
@@ -822,23 +846,9 @@ export default function AdminDashboard() {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center space-x-2.5 mb-2">
-              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider bg-red-500/20 text-red-300 border border-red-500/40 font-bold">
-                <Shield size={12} className="text-red-400" />
-                <span>Central Admin Operations Hub</span>
-              </span>
-              <span className="inline-flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 px-2.5 py-1 rounded-full font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Database Aggregations Active</span>
-              </span>
-            </div>
-
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
               Campus Bites Admin Console
             </h1>
-            <p className="text-xs sm:text-sm text-white/70 max-w-2xl mt-1">
-              Authoritative platform operations, live kitchen queues, verified revenue aggregations, structured audit logging, and outlet governance.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -849,7 +859,7 @@ export default function AdminDashboard() {
               title="Populate live simulated campus orders"
             >
               <Zap size={14} className={isInjecting ? 'animate-bounce' : ''} />
-              <span>{isInjecting ? 'Injecting Orders...' : '⚡ Inject Live Orders'}</span>
+              <span>{isInjecting ? 'Injecting Orders...' : 'Inject Live Orders'}</span>
             </button>
 
             <button
@@ -1268,7 +1278,7 @@ export default function AdminDashboard() {
                 {liveOrders.length === 0 ? (
                   <div className="col-span-full py-16 text-center text-white/40 bg-[#1D1D21]/50 border border-white/5 rounded-3xl space-y-3">
                     <UtensilsCrossed size={36} className="mx-auto text-white/20" />
-                    <p className="text-xs">No orders match the selected filter. Click "⚡ Inject Live Orders" to generate realistic campus orders.</p>
+                    <p className="text-xs">No orders match the selected filter. Click "Inject Live Orders" to generate realistic campus orders.</p>
                   </div>
                 ) : (
                   liveOrders.map(order => {
@@ -1506,23 +1516,33 @@ export default function AdminDashboard() {
                         </button>
                       </div>
 
-                      <button
-                        onClick={() => setEditStallModal({
-                          isOpen: true,
-                          stall: s,
-                          name: s.name,
-                          areaId: String(s.area_id),
-                          status: s.status,
-                          isClosingSoon: s.isClosingSoon,
-                          closingDiscount: s.closingDiscount,
-                          isSubmitting: false,
-                          error: ''
-                        })}
-                        className="w-full py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/60 hover:text-white flex items-center justify-center space-x-1 transition-all"
-                      >
-                        <Edit3 size={12} />
-                        <span>Edit Outlet Settings</span>
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setEditStallModal({
+                            isOpen: true,
+                            stall: s,
+                            name: s.name,
+                            areaId: String(s.area_id),
+                            status: s.status,
+                            isClosingSoon: s.isClosingSoon,
+                            closingDiscount: s.closingDiscount,
+                            isSubmitting: false,
+                            error: ''
+                          })}
+                          className="flex-1 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/60 hover:text-white flex items-center justify-center space-x-1 transition-all"
+                        >
+                          <Edit3 size={12} />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => promptDeleteStall(s.id, s.name)}
+                          className="px-3 py-1.5 rounded-xl bg-red-950/20 hover:bg-red-900/40 border border-red-800/30 text-xs text-red-300 hover:text-red-200 flex items-center justify-center space-x-1 transition-all"
+                          title="Delete this outlet"
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </div>
 
                   </div>
@@ -2422,7 +2442,7 @@ export default function AdminDashboard() {
 
               {editRoleModal.user.role === 'ADMIN' && editRoleModal.role !== 'ADMIN' && (
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
-                  ⚠️ Note: The platform prevents demoting the last active administrator to avoid platform lockout.
+                  Note: The platform prevents demoting the last active administrator to avoid platform lockout.
                 </div>
               )}
 

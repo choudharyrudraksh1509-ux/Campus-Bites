@@ -7,7 +7,14 @@ export const getShops = async (req: Request, res: Response): Promise<void> => {
     try {
         const mapped = await appCache.getOrSet('shops:active', 15000, async () => {
             let shops = await prisma.shop.findMany({
-                where: { status: 'ACTIVE' },
+                where: {
+                    status: 'ACTIVE',
+                    NOT: [
+                        { name: { startsWith: 'Admin Test Stall' } },
+                        { name: { startsWith: 'UAT Acceptance Stall' } },
+                        { name: { contains: 'Test Stall' } }
+                    ]
+                },
                 select: {
                     id: true,
                     name: true,

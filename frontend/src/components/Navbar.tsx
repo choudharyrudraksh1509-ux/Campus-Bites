@@ -56,9 +56,9 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
         className="hidden md:grid fixed left-1/2 -translate-x-1/2 z-40 max-w-2xl w-[92%] backdrop-blur-xl bg-[#1D1D21]/90 border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.6)] grid-cols-3 items-center px-6 py-3.5 transition-all"
       >
         
-        {/* Column 1 (Left): Navigation Links - Removed Outlets & Activity for Staff */}
+        {/* Column 1 (Left): Navigation Links - Removed Outlets & Activity for Staff & Admin */}
         <div className="flex items-center space-x-1 sm:space-x-2">
-          {user?.role !== 'STAFF' && (
+          {user?.role !== 'STAFF' && user?.role !== 'ADMIN' && user?.role !== 'OWNER' && (
             <>
               <Link
                 to="/"
@@ -209,7 +209,27 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
         }}
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1D1D21]/95 backdrop-blur-xl border-t border-[#930E36]/30 px-2 flex items-center justify-around shadow-[0_-10px_25px_rgba(0,0,0,0.5)]"
       >
-        {user?.role !== 'STAFF' ? (
+        {user?.role === 'ADMIN' || user?.role === 'OWNER' ? (
+          <Link
+            to="/admin"
+            className={`flex flex-col items-center py-1 px-4 rounded-2xl transition-all ${
+              location.pathname === '/admin' ? 'text-red-400 font-semibold' : 'text-white/60 hover:text-white'
+            }`}
+          >
+            <Shield size={20} className={location.pathname === '/admin' ? 'text-red-400' : 'text-white/60'} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Admin Hub</span>
+          </Link>
+        ) : user?.role === 'STAFF' ? (
+          <Link
+            to="/staff"
+            className={`flex flex-col items-center py-1 px-4 rounded-2xl transition-all ${
+              location.pathname === '/staff' ? 'text-[#FF004B] font-semibold' : 'text-white/60 hover:text-white'
+            }`}
+          >
+            <Store size={20} />
+            <span className="text-[10px] mt-0.5 tracking-tight">Portal</span>
+          </Link>
+        ) : (
           <>
             <Link
               to="/"
@@ -247,16 +267,6 @@ export default function Navbar({ user, onLogout, onOpenAuth, onUpdateUser, cartC
               <span className="text-[10px] mt-0.5 tracking-tight">Cart</span>
             </button>
           </>
-        ) : (
-          <Link
-            to="/staff"
-            className={`flex flex-col items-center py-1 px-4 rounded-2xl transition-all ${
-              location.pathname === '/staff' ? 'text-[#FF004B] font-semibold' : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Shield size={20} />
-            <span className="text-[10px] mt-0.5 tracking-tight">Portal</span>
-          </Link>
         )}
 
         <button

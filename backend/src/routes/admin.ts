@@ -6,6 +6,7 @@ import {
     getAllStalls,
     createStallByAdmin,
     updateStallByAdmin,
+    deleteStallByAdmin,
     getStallStaff,
     getStallMenu,
     getAllUsers,
@@ -36,6 +37,7 @@ router.patch('/orders/:orderId/status', validateRequest(updateOrderStatusSchema)
 router.get('/stalls', getAllStalls);
 router.post('/stalls', createStallByAdmin);
 router.patch('/stalls/:shopId', updateStallByAdmin);
+router.delete('/stalls/:shopId', deleteStallByAdmin);
 router.get('/stalls/:shopId/staff', getStallStaff);
 router.get('/stalls/:shopId/menu', getStallMenu);
 
