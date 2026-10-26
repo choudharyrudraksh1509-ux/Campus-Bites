@@ -193,12 +193,13 @@ export default function Menu() {
   const navigate = useNavigate();
   const sId = Number(shopId) || 1;
 
-  const [menu, setMenu] = useState<MenuItem[]>([]);
-  const [shopName, setShopName] = useState('Campus Outlet');
-  const [areaName, setAreaName] = useState('Campus');
+  const initialMock = FULL_MOCK_MENUS[sId] || FULL_MOCK_MENUS[1];
+  const [menu, setMenu] = useState<MenuItem[]>(() => initialMock ? initialMock.items.map(item => ({ ...item, originalPrice: item.price, discountPercent: 0, isDynamicPricing: false })) : []);
+  const [shopName, setShopName] = useState(initialMock?.shop_name || 'Campus Outlet');
+  const [areaName, setAreaName] = useState(initialMock?.area_name || 'Campus');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDemoModeActive, setIsDemoModeActive] = useState<boolean>(false);
 
@@ -593,28 +594,11 @@ export default function Menu() {
         
         {/* Menu Items Grid */}
         <div className="lg:col-span-2 space-y-3">
-          {loading ? (
+          {loading && menu.length === 0 ? (
             <div className="space-y-3">
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="h-24 bg-[#4C1829]/30 animate-pulse rounded-2xl border border-[#930E36]/30"></div>
               ))}
-            </div>
-          ) : (error && menu.length === 0) ? (
-            <div className="bg-[#4C1829]/70 border border-red-500/50 rounded-3xl p-8 text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
-                <AlertCircle size={28} />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-white">Menu Unavailable</h3>
-                <p className="text-xs text-white/70">{error}</p>
-              </div>
-              <button
-                onClick={fetchMenu}
-                className="inline-flex items-center space-x-2 bg-white text-[#4C1829] px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider hover:bg-white/90 transition-all shadow-lg"
-              >
-                <RefreshCw size={14} />
-                <span>Retry Connection</span>
-              </button>
             </div>
           ) : filteredMenu.length === 0 ? (
             <div className="bg-[#1D1D21]/80 border border-white/10 rounded-3xl p-10 text-center space-y-3">
