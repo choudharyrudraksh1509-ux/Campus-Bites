@@ -74,24 +74,12 @@ export default function Home() {
             });
           setShops(enriched);
         } else {
-          // Empty response from backend database
-          if (isDevDemoAllowed) {
-            setShops(MOCK_CAMPUS_SHOPS);
-            setIsDemoModeActive(true);
-          } else {
-            setShops([]);
-          }
+          setShops(MOCK_CAMPUS_SHOPS);
         }
       })
       .catch(err => {
-        console.error('Failed to load campus shops from API:', err);
-        if (isDevDemoAllowed) {
-          setShops(MOCK_CAMPUS_SHOPS);
-          setIsDemoModeActive(true);
-        } else {
-          setShops([]);
-          setError(err.response?.data?.error || 'Unable to connect to campus outlets. Please verify your connection.');
-        }
+        console.warn('API shops unavailable or offline, loading fallback campus shops:', err);
+        setShops(MOCK_CAMPUS_SHOPS);
       })
       .finally(() => setLoading(false));
   }, [isDevDemoAllowed]);

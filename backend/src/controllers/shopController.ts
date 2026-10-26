@@ -143,11 +143,11 @@ export const getShopMenu = async (req: Request, res: Response): Promise<void> =>
                 return {
                     item_id: item.id,
                     shop_id: item.shopId,
-                    shop_name: item.shop.name,
+                    shop_name: item.shop?.name || 'Campus Outlet',
                     item_name: item.name,
                     description: cleanDescription,
                     quantityAvailable,
-                    category_name: item.category.name,
+                    category_name: item.category?.name || 'General',
                     price: item.price,
                     originalPrice: item.originalPrice || item.price,
                     discountPercent: item.discountPercent || 0,

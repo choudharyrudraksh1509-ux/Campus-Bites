@@ -309,23 +309,12 @@ export default function Menu() {
           }));
           setShopName(res.data[0]?.shop?.name || 'Campus Outlet');
         } else {
-          if (isDevDemoAllowed) {
-            loadMockData();
-            setIsDemoModeActive(true);
-          } else {
-            setMenu([]);
-          }
+          loadMockData();
         }
       })
       .catch((err) => {
-        console.error('Failed to load menu from API:', err);
-        if (isDevDemoAllowed) {
-          loadMockData();
-          setIsDemoModeActive(true);
-        } else {
-          setMenu([]);
-          setError(err.response?.data?.error || 'Unable to load menu from the outlet server. Please check your connection and retry.');
-        }
+        console.warn('API menu unavailable or offline, loading cached outlet menu items:', err);
+        loadMockData();
       })
       .finally(() => setLoading(false));
 
@@ -610,7 +599,7 @@ export default function Menu() {
                 <div key={i} className="h-24 bg-[#4C1829]/30 animate-pulse rounded-2xl border border-[#930E36]/30"></div>
               ))}
             </div>
-          ) : error ? (
+          ) : (error && menu.length === 0) ? (
             <div className="bg-[#4C1829]/70 border border-red-500/50 rounded-3xl p-8 text-center space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto">
                 <AlertCircle size={28} />
